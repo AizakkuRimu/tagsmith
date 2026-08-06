@@ -372,8 +372,8 @@
         </div>
 
         <div class="field">
-          <div class="range-label"><span>Text size</span><span id="labelSizeVal">20%</span></div>
-          <input type="range" id="labelSize" min="5" max="35" value="20" />
+          <div class="range-label"><span>Text size</span><span id="labelSizeVal">6%</span></div>
+          <input type="range" id="labelSize" min="1" max="20" step="0.5" value="6" />
         </div>
 
         <div class="field">
@@ -454,8 +454,8 @@
         </div>
 
         <div class="field">
-          <div class="range-label"><span>Text size</span><span id="priceSizeVal">14%</span></div>
-          <input type="range" id="priceSize" min="5" max="35" value="14" />
+          <div class="range-label"><span>Text size</span><span id="priceSizeVal">4%</span></div>
+          <input type="range" id="priceSize" min="1" max="20" step="0.5" value="4" />
         </div>
 
         <div class="field">
@@ -529,12 +529,12 @@
     image: { el:null, width:0, height:0, name:"" },
     label: {
       enabled:true, text:"MODERN DESIGN", corner:"top-left",
-      fontFamily:"Fraunces", fontSizePct:20, bold:true, italic:false, underline:false,
+      fontFamily:"Fraunces", fontSizePct:6, bold:true, italic:false, underline:false,
       textColor:"#191305", boxColor:"#ffb627", padding:1
     },
     price: {
       enabled:true, amount:29.99, currency:"USD", corner:"bottom-right",
-      fontFamily:"IBM Plex Mono", fontSizePct:14, bold:true, italic:false, underline:false,
+      fontFamily:"IBM Plex Mono", fontSizePct:4, bold:true, italic:false, underline:false,
       textColor:"#f4f2ec", boxColor:"#191305", padding:1
     }
   };
@@ -650,7 +650,7 @@
     const el = $(id);
     el.addEventListener("input", (e)=>{
       obj[key] = parseFloat(e.target.value);
-      $(valId).textContent = (key.includes("Pct") ? Math.round(obj[key]) : obj[key].toFixed(1)) + suffix;
+      $(valId).textContent = obj[key].toFixed(1) + suffix;
       (cb||render)();
     });
   }
