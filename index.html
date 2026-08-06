@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tagsmith — turn product photos into Pinterest pins</title>
+<meta name="description" content="Drop in an Amazon product photo, add a label and a price tag, and export a Pinterest-ready pin." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23ffb627' stroke-width='4'%3E%3Cpath d='M8 28 28 8h28v28L36 56a4 4 0 0 1-5.7 0L8 33.7a4 4 0 0 1 0-5.7Z'/%3E%3Ccircle cx='42' cy='22' r='4' fill='%23ffb627'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;0,900;1,600;1,900&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Space+Grotesk:wght@400;500;700&family=Poppins:wght@400;600;700&family=Inter:wght@400;500;600;700&family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#101012;
+    --panel:#18181c;
+    --panel-alt:#1f1f25;
+    --border:#2b2b32;
+    --border-soft:#232328;
+    --ink:#f4f2ec;
+    --muted:#96939d;
+    --muted-2:#68656e;
+    --accent:#ffb627;
+    --accent-ink:#191305;
+    --mat:#0c0c0e;
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;}
+  input,select{font-family:inherit;}
+  ::selection{background:var(--accent);color:var(--accent-ink);}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 28px;
+    border-bottom:1px solid var(--border);
+    background:var(--panel);
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand__mark{width:30px;height:30px;flex:none;}
+  .brand__text{display:flex;flex-direction:column;line-height:1;}
+  .brand__name{
+    font-family:var(--font-display);
+    font-weight:900;font-style:italic;
+    font-size:20px;letter-spacing:0.01em;
+  }
+  .brand__tag{
+    font-family:var(--font-mono);
+    font-size:10.5px;color:var(--muted);
+    letter-spacing:0.04em;margin-top:4px;
+    text-transform:uppercase;
+  }
+  .btn{
+    appearance:none;border:1px solid var(--border);
+    background:var(--panel-alt);color:var(--ink);
+    padding:10px 16px;border-radius:8px;
+    font-size:13.5px;font-weight:600;
+    display:inline-flex;align-items:center;gap:8px;
+    cursor:pointer;transition:all .15s ease;
+  }
+  .btn:hover{border-color:var(--muted-2);}
+  .btn--accent{
+    background:var(--accent);border-color:var(--accent);color:var(--accent-ink);
+  }
+  .btn--accent:hover{filter:brightness(1.06);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn svg{width:15px;height:15px;flex:none;}
+
+  /* ---------- layout ---------- */
+  .app{
+    display:grid;
+    grid-template-columns:368px 1fr;
+    height:calc(100vh - 61px);
+  }
+  .sidebar{
+    overflow-y:auto;
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    padding:24px 22px 60px;
+  }
+  .stage{
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+    padding:40px;
+    background-image:
+      radial-gradient(circle, var(--border-soft) 1px, transparent 1px);
+    background-size:22px 22px;
+    background-color:var(--mat);
+    overflow:auto;
+  }
+
+  /* ---------- sidebar sections ---------- */
+  .section{
+    padding:20px 0;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .section:first-child{padding-top:0;}
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:10.5px;letter-spacing:.09em;
+    color:var(--accent);text-transform:uppercase;
+    display:flex;align-items:center;gap:8px;margin-bottom:12px;
+  }
+  .eyebrow__num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:16px;height:16px;border-radius:3px;
+    background:rgba(255,182,39,.14);color:var(--accent);
+    font-size:10px;
+  }
+  .field{margin-bottom:14px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:block;font-size:12px;color:var(--muted);
+    margin-bottom:6px;font-weight:500;
+  }
+  .field input[type="text"],
+  .field input[type="number"],
+  .field select{
+    width:100%;padding:9px 10px;border-radius:7px;
+    border:1px solid var(--border);background:var(--panel-alt);
+    color:var(--ink);font-size:13.5px;
+  }
+  .field input[type="text"]:focus,
+  .field input[type="number"]:focus,
+  .field select:focus{border-color:var(--accent);}
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;min-width:0;}
+
+  input[type="range"]{
+    -webkit-appearance:none;width:100%;height:4px;
+    background:var(--border);border-radius:2px;outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid var(--panel);
+  }
+  input[type="range"]::-moz-range-thumb{
+    width:14px;height:14px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid var(--panel);
+  }
+  .range-label{
+    display:flex;justify-content:space-between;
+    font-size:11.5px;color:var(--muted);margin-bottom:6px;
+  }
+  .range-label span:last-child{font-family:var(--font-mono);color:var(--ink);}
+
+  input[type="color"]{
+    -webkit-appearance:none;appearance:none;
+    width:38px;height:32px;border:1px solid var(--border);
+    border-radius:6px;background:none;cursor:pointer;padding:0;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper{padding:2px;}
+  input[type="color"]::-webkit-color-swatch{border:none;border-radius:4px;}
+
+  .color-field{display:flex;align-items:center;gap:8px;}
+  .color-field label{margin:0;font-size:12px;color:var(--muted);flex:1;}
+
+  .segmented{
+    display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;
+  }
+  .segmented button{
+    flex:1;background:var(--panel-alt);border:none;color:var(--muted);
+    padding:8px 0;cursor:pointer;font-size:13px;
+    border-right:1px solid var(--border);
+  }
+  .segmented button:last-child{border-right:none;}
+  .segmented button.is-b{font-weight:700;}
+  .segmented button.is-i{font-style:italic;}
+  .segmented button.is-u{text-decoration:underline;}
+  .segmented button.active{background:var(--accent);color:var(--accent-ink);}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .toggle-row .field{margin:0;flex:1;}
+  .switch{
+    position:relative;width:36px;height:20px;flex:none;margin-left:12px;
+  }
+  .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
+  .switch .track{
+    position:absolute;inset:0;background:var(--border);border-radius:20px;transition:.15s;
+  }
+  .switch .knob{
+    position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:var(--muted);transition:.15s;
+  }
+  .switch input:checked + .track{background:rgba(255,182,39,.35);}
+  .switch input:checked + .track + .knob{transform:translateX(16px);background:var(--accent);}
+
+  /* corner picker — the tag grommet */
+  .corner-picker{margin:10px 0 4px;}
+  .corner-picker__frame{
+    position:relative;width:100%;max-width:150px;height:88px;
+    border:1.5px dashed var(--border);border-radius:8px;
+    margin:0 auto;
+  }
+  .eyelet{
+    position:absolute;width:16px;height:16px;border-radius:50%;
+    border:2px solid var(--muted-2);background:var(--mat);
+    cursor:pointer;transition:all .15s ease;padding:0;
+  }
+  .eyelet::after{
+    content:"";position:absolute;inset:4px;border-radius:50%;background:var(--border);
+  }
+  .eyelet[data-corner="top-left"]{top:-8px;left:-8px;}
+  .eyelet[data-corner="top-right"]{top:-8px;right:-8px;}
+  .eyelet[data-corner="bottom-left"]{bottom:-8px;left:-8px;}
+  .eyelet[data-corner="bottom-right"]{bottom:-8px;right:-8px;}
+  .eyelet:hover{border-color:var(--accent);}
+  .eyelet.active{border-color:var(--accent);background:var(--accent);}
+  .eyelet.active::after{background:var(--accent-ink);}
+
+  /* ---------- upload dropzone ---------- */
+  .dropzone{
+    border:1.5px dashed var(--border);border-radius:10px;
+    padding:22px 14px;text-align:center;cursor:pointer;
+    transition:all .15s ease;background:var(--panel-alt);
+  }
+  .dropzone:hover, .dropzone.is-drag{border-color:var(--accent);background:rgba(255,182,39,.06);}
+  .dropzone svg{width:26px;height:26px;color:var(--muted);margin-bottom:8px;}
+  .dropzone p{margin:0;font-size:13px;color:var(--muted);}
+  .dropzone strong{color:var(--ink);font-weight:600;}
+  .dropzone input{display:none;}
+  .file-meta{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:10px;font-size:11.5px;color:var(--muted);
+    font-family:var(--font-mono);
+  }
+  .file-meta a{color:var(--accent);text-decoration:none;font-family:var(--font-body);font-weight:600;}
+
+  /* ---------- canvas stage ---------- */
+  .canvas-wrap{
+    position:relative;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.6);
+    animation:rise .35s ease;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  #pinCanvas{
+    display:block;max-width:100%;max-height:calc(100vh - 160px);
+    border-radius:3px;background:#000;
+  }
+  .empty-state{
+    text-align:center;color:var(--muted);max-width:280px;
+  }
+  .empty-state svg{width:44px;height:44px;color:var(--muted-2);margin-bottom:14px;}
+  .empty-state h2{
+    font-family:var(--font-display);font-style:italic;font-weight:700;
+    font-size:20px;color:var(--ink);margin:0 0 8px;
+  }
+  .empty-state p{font-size:13px;line-height:1.6;margin:0;}
+
+  /* ---------- modal ---------- */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(8,8,9,.7);
+    display:none;align-items:center;justify-content:center;z-index:50;
+    backdrop-filter:blur(2px);
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;padding:26px;width:340px;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);
+    animation:pop .18s ease;
+  }
+  @keyframes pop{from{opacity:0;transform:scale(.96);}to{opacity:1;transform:scale(1);}}
+  .modal h3{
+    font-family:var(--font-display);font-style:italic;font-weight:700;
+    font-size:19px;margin:0 0 4px;
+  }
+  .modal p.hint{font-size:12.5px;color:var(--muted);margin:0 0 16px;}
+  .modal .field{margin-bottom:18px;}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;}
+
+  .note{font-size:11px;color:var(--muted-2);margin-top:8px;line-height:1.5;}
+
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto;}
+    .sidebar{border-right:none;border-bottom:1px solid var(--border);max-height:none;}
+    .stage{min-height:60vh;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand__mark" viewBox="0 0 64 64" fill="none">
+      <path d="M8 28 28 8h28v28L36 56a4 4 0 0 1-5.7 0L8 33.7a4 4 0 0 1 0-5.7Z" stroke="#ffb627" stroke-width="4"/>
+      <circle cx="42" cy="22" r="4" fill="#ffb627"/>
+    </svg>
+    <div class="brand__text">
+      <span class="brand__name">Tagsmith</span>
+      <span class="brand__tag">Product photo → Pinterest pin</span>
+    </div>
+  </div>
+  <button class="btn btn--accent" id="downloadBtn" disabled>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
+    Download JPEG
+  </button>
+</header>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- STEP 1 — PHOTO -->
+    <section class="section">
+      <div class="eyebrow"><span class="eyebrow__num">1</span> Product photo</div>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload product photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+        <p><strong>Click to upload</strong> or drag a photo here</p>
+        <p style="margin-top:4px;">JPG or PNG, any size</p>
+        <input type="file" id="fileInput" accept="image/*" />
+      </div>
+      <div class="file-meta" id="fileMeta" style="display:none;">
+        <span id="fileDims">—</span>
+        <a href="#" id="replaceLink">Replace</a>
+      </div>
+    </section>
+
+    <!-- STEP 2 — LABEL TAG -->
+    <section class="section">
+      <div class="eyebrow"><span class="eyebrow__num">2</span> Label tag</div>
+
+      <div class="toggle-row">
+        <div class="field"><label style="margin:0;">Show label</label></div>
+        <label class="switch">
+          <input type="checkbox" id="labelEnabled" checked>
+          <span class="track"></span><span class="knob"></span>
+        </label>
+      </div>
+
+      <div id="labelControls">
+        <div class="field">
+          <label for="labelText">Text</label>
+          <input type="text" id="labelText" maxlength="40" value="MODERN DESIGN" />
+        </div>
+
+        <div class="field">
+          <label>Corner position</label>
+          <div class="corner-picker" data-target="label">
+            <div class="corner-picker__frame">
+              <button class="eyelet" data-corner="top-left" aria-label="Top left"></button>
+              <button class="eyelet" data-corner="top-right" aria-label="Top right"></button>
+              <button class="eyelet" data-corner="bottom-left" aria-label="Bottom left"></button>
+              <button class="eyelet" data-corner="bottom-right" aria-label="Bottom right"></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="labelFont">Font</label>
+          <select id="labelFont">
+            <option value="Fraunces" selected>Fraunces — serif</option>
+            <option value="Playfair Display">Playfair Display — serif</option>
+            <option value="Space Grotesk">Space Grotesk — sans</option>
+            <option value="Poppins">Poppins — sans</option>
+            <option value="Inter">Inter — sans</option>
+            <option value="Bebas Neue">Bebas Neue — condensed</option>
+            <option value="IBM Plex Mono">IBM Plex Mono — mono</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="range-label"><span>Text size</span><span id="labelSizeVal">20%</span></div>
+          <input type="range" id="labelSize" min="5" max="35" value="20" />
+        </div>
+
+        <div class="field">
+          <div class="range-label"><span>Box padding</span><span id="labelPadVal">1.0×</span></div>
+          <input type="range" id="labelPad" min="0.4" max="2.2" step="0.1" value="1" />
+        </div>
+
+        <div class="field">
+          <label>Style</label>
+          <div class="segmented">
+            <button type="button" class="is-b active" data-style="bold">B</button>
+            <button type="button" class="is-i" data-style="italic">I</button>
+            <button type="button" class="is-u" data-style="underline">U</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field color-field">
+            <label for="labelTextColor">Text</label>
+            <input type="color" id="labelTextColor" value="#191305" />
+          </div>
+          <div class="field color-field">
+            <label for="labelBoxColor">Box</label>
+            <input type="color" id="labelBoxColor" value="#ffb627" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 3 — PRICE TAG -->
+    <section class="section">
+      <div class="eyebrow"><span class="eyebrow__num">3</span> Price tag</div>
+
+      <div class="toggle-row">
+        <div class="field"><label style="margin:0;">Show price</label></div>
+        <label class="switch">
+          <input type="checkbox" id="priceEnabled" checked>
+          <span class="track"></span><span class="knob"></span>
+        </label>
+      </div>
+
+      <div id="priceControls">
+        <div class="row">
+          <div class="field">
+            <label for="priceAmount">Price (USD)</label>
+            <input type="number" id="priceAmount" min="0" step="0.01" value="29.99" />
+          </div>
+          <div class="field">
+            <label for="priceCurrency">Show as</label>
+            <select id="priceCurrency"></select>
+          </div>
+        </div>
+        <p class="note" id="rateNote">Fetching live exchange rates…</p>
+
+        <div class="field">
+          <label>Corner position</label>
+          <div class="corner-picker" data-target="price">
+            <div class="corner-picker__frame">
+              <button class="eyelet" data-corner="top-left" aria-label="Top left"></button>
+              <button class="eyelet" data-corner="top-right" aria-label="Top right"></button>
+              <button class="eyelet" data-corner="bottom-left" aria-label="Bottom left"></button>
+              <button class="eyelet" data-corner="bottom-right" aria-label="Bottom right"></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="priceFont">Font</label>
+          <select id="priceFont">
+            <option value="IBM Plex Mono" selected>IBM Plex Mono — mono</option>
+            <option value="Space Grotesk">Space Grotesk — sans</option>
+            <option value="Poppins">Poppins — sans</option>
+            <option value="Inter">Inter — sans</option>
+            <option value="Bebas Neue">Bebas Neue — condensed</option>
+            <option value="Fraunces">Fraunces — serif</option>
+            <option value="Playfair Display">Playfair Display — serif</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="range-label"><span>Text size</span><span id="priceSizeVal">14%</span></div>
+          <input type="range" id="priceSize" min="5" max="35" value="14" />
+        </div>
+
+        <div class="field">
+          <div class="range-label"><span>Box padding</span><span id="pricePadVal">1.0×</span></div>
+          <input type="range" id="pricePad" min="0.4" max="2.2" step="0.1" value="1" />
+        </div>
+
+        <div class="field">
+          <label>Style</label>
+          <div class="segmented">
+            <button type="button" class="is-b active" data-style="bold">B</button>
+            <button type="button" class="is-i" data-style="italic">I</button>
+            <button type="button" class="is-u" data-style="underline">U</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field color-field">
+            <label for="priceTextColor">Text</label>
+            <input type="color" id="priceTextColor" value="#f4f2ec" />
+          </div>
+          <div class="field color-field">
+            <label for="priceBoxColor">Box</label>
+            <input type="color" id="priceBoxColor" value="#191305" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- STAGE -->
+  <main class="stage" id="stage">
+    <div class="empty-state" id="emptyState">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      <h2>Your canvas is waiting</h2>
+      <p>Upload a product photo on the left to start building your pin. Both tags will scale and align automatically.</p>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap" style="display:none;">
+      <canvas id="pinCanvas"></canvas>
+    </div>
+  </main>
+
+</div>
+
+<!-- DOWNLOAD MODAL -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3>Name your pin</h3>
+    <p class="hint">Saved as a high-quality JPEG.</p>
+    <div class="field">
+      <label for="filenameInput">File name</label>
+      <input type="text" id="filenameInput" value="my-pinterest-pin" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelDownload">Cancel</button>
+      <button class="btn btn--accent" id="confirmDownload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Download
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- state ---------------- */
+  const state = {
+    image: { el:null, width:0, height:0, name:"" },
+    label: {
+      enabled:true, text:"MODERN DESIGN", corner:"top-left",
+      fontFamily:"Fraunces", fontSizePct:20, bold:true, italic:false, underline:false,
+      textColor:"#191305", boxColor:"#ffb627", padding:1
+    },
+    price: {
+      enabled:true, amount:29.99, currency:"USD", corner:"bottom-right",
+      fontFamily:"IBM Plex Mono", fontSizePct:14, bold:true, italic:false, underline:false,
+      textColor:"#f4f2ec", boxColor:"#191305", padding:1
+    }
+  };
+
+  const CURRENCIES = [
+    ["USD","US Dollar"],["EUR","Euro"],["GBP","British Pound"],["CAD","Canadian Dollar"],
+    ["AUD","Australian Dollar"],["JPY","Japanese Yen"],["INR","Indian Rupee"],
+    ["MXN","Mexican Peso"],["BRL","Brazilian Real"],["SGD","Singapore Dollar"],
+    ["AED","UAE Dirham"],["CHF","Swiss Franc"],["CNY","Chinese Yuan"]
+  ];
+  const FALLBACK_RATES = { USD:1, EUR:0.92, GBP:0.78, CAD:1.36, AUD:1.52, JPY:149,
+    INR:83.3, MXN:17.0, BRL:5.4, SGD:1.34, AED:3.67, CHF:0.88, CNY:7.2 };
+  let rates = { ...FALLBACK_RATES };
+  let ratesAreLive = false;
+
+  /* ---------------- dom refs ---------------- */
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("pinCanvas");
+  const ctx = canvas.getContext("2d");
+  const stage = $("stage");
+  const emptyState = $("emptyState");
+  const canvasWrap = $("canvasWrap");
+  const downloadBtn = $("downloadBtn");
+
+  /* ---------------- currency select ---------------- */
+  const currencySelect = $("priceCurrency");
+  CURRENCIES.forEach(([code,name])=>{
+    const opt = document.createElement("option");
+    opt.value = code; opt.textContent = code;
+    currencySelect.appendChild(opt);
+  });
+  currencySelect.value = "USD";
+
+  function formatPrice(amountUSD, code){
+    const rate = rates[code] ?? 1;
+    const converted = amountUSD * rate;
+    try{
+      return new Intl.NumberFormat("en-US", { style:"currency", currency:code,
+        maximumFractionDigits: code === "JPY" ? 0 : 2 }).format(converted);
+    }catch(e){
+      return "$" + converted.toFixed(2);
+    }
+  }
+
+  async function fetchRates(){
+    try{
+      const symbols = CURRENCIES.map(c=>c[0]).filter(c=>c!=="USD").join(",");
+      const res = await fetch(`https://api.frankfurter.app/latest?from=USD&to=${symbols}`);
+      if(!res.ok) throw new Error("bad response");
+      const data = await res.json();
+      rates = { USD:1, ...data.rates };
+      ratesAreLive = true;
+      $("rateNote").textContent = "Live exchange rates, updated just now.";
+    }catch(e){
+      ratesAreLive = false;
+      $("rateNote").textContent = "Using approximate offline rates (live rates unavailable).";
+    }
+    render();
+  }
+  fetchRates();
+
+  /* ---------------- upload ---------------- */
+  const dropzone = $("dropzone");
+  const fileInput = $("fileInput");
+  const fileMeta = $("fileMeta");
+  const fileDims = $("fileDims");
+
+  function loadImageFile(file){
+    if(!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        state.image.el = img;
+        state.image.width = img.naturalWidth;
+        state.image.height = img.naturalHeight;
+        state.image.name = file.name;
+        fileDims.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
+        fileMeta.style.display = "flex";
+        emptyState.style.display = "none";
+        canvasWrap.style.display = "block";
+        downloadBtn.disabled = false;
+        render();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("keydown", (e) => { if(e.key === "Enter" || e.key === " "){ fileInput.click(); }});
+  fileInput.addEventListener("change", (e) => loadImageFile(e.target.files[0]));
+  ["dragenter","dragover"].forEach(ev => dropzone.addEventListener(ev, (e)=>{
+    e.preventDefault(); dropzone.classList.add("is-drag");
+  }));
+  ["dragleave","drop"].forEach(ev => dropzone.addEventListener(ev, (e)=>{
+    e.preventDefault(); dropzone.classList.remove("is-drag");
+  }));
+  dropzone.addEventListener("drop", (e) => {
+    const file = e.dataTransfer.files[0];
+    loadImageFile(file);
+  });
+  $("replaceLink").addEventListener("click", (e) => { e.preventDefault(); fileInput.click(); });
+
+  /* ---------------- generic control wiring ---------------- */
+  function bindText(id, obj, key, cb){
+    $(id).addEventListener("input", (e)=>{ obj[key] = e.target.value; (cb||render)(); });
+  }
+  function bindNumber(id, obj, key, cb){
+    $(id).addEventListener("input", (e)=>{ obj[key] = parseFloat(e.target.value)||0; (cb||render)(); });
+  }
+  function bindRange(id, valId, obj, key, suffix, cb){
+    const el = $(id);
+    el.addEventListener("input", (e)=>{
+      obj[key] = parseFloat(e.target.value);
+      $(valId).textContent = (key.includes("Pct") ? Math.round(obj[key]) : obj[key].toFixed(1)) + suffix;
+      (cb||render)();
+    });
+  }
+  function bindSelect(id, obj, key, cb){
+    $(id).addEventListener("change", (e)=>{ obj[key] = e.target.value; (cb||render)(); });
+  }
+  function bindColor(id, obj, key){
+    $(id).addEventListener("input", (e)=>{ obj[key] = e.target.value; render(); });
+  }
+  function bindToggle(id, obj, key, controlsId){
+    $(id).addEventListener("change", (e)=>{
+      obj[key] = e.target.checked;
+      if(controlsId) $(controlsId).style.opacity = obj[key] ? "1" : ".35";
+      render();
+    });
+  }
+  function bindSegmented(container, obj){
+    container.querySelectorAll("button[data-style]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const styleKey = btn.dataset.style;
+        obj[styleKey] = !obj[styleKey];
+        btn.classList.toggle("active", obj[styleKey]);
+        render();
+      });
+    });
+  }
+  function bindCornerPicker(container, obj){
+    const buttons = container.querySelectorAll(".eyelet");
+    buttons.forEach(btn=>{
+      if(btn.dataset.corner === obj.corner) btn.classList.add("active");
+      btn.addEventListener("click", ()=>{
+        obj.corner = btn.dataset.corner;
+        buttons.forEach(b=>b.classList.toggle("active", b===btn));
+        render();
+      });
+    });
+  }
+
+  bindText("labelText", state.label, "text");
+  bindSelect("labelFont", state.label, "fontFamily");
+  bindRange("labelSize","labelSizeVal", state.label, "fontSizePct", "%");
+  bindRange("labelPad","labelPadVal", state.label, "padding", "×");
+  bindColor("labelTextColor", state.label, "textColor");
+  bindColor("labelBoxColor", state.label, "boxColor");
+  bindToggle("labelEnabled", state.label, "enabled", "labelControls");
+  bindCornerPicker(document.querySelector('.corner-picker[data-target="label"]'), state.label);
+
+  bindNumber("priceAmount", state.price, "amount");
+  bindSelect("priceCurrency", state.price, "currency");
+  bindSelect("priceFont", state.price, "fontFamily");
+  bindRange("priceSize","priceSizeVal", state.price, "fontSizePct", "%");
+  bindRange("pricePad","pricePadVal", state.price, "padding", "×");
+  bindColor("priceTextColor", state.price, "textColor");
+  bindColor("priceBoxColor", state.price, "boxColor");
+  bindToggle("priceEnabled", state.price, "enabled", "priceControls");
+  bindCornerPicker(document.querySelector('.corner-picker[data-target="price"]'), state.price);
+
+  // wire segmented style buttons individually (label + price each have their own .segmented)
+  document.querySelectorAll("#labelControls .segmented").forEach(seg=>bindSegmented(seg, state.label));
+  document.querySelectorAll("#priceControls .segmented").forEach(seg=>bindSegmented(seg, state.price));
+
+  /* ---------------- canvas rendering ---------------- */
+  function roundRectPath(c,x,y,w,h,r){
+    r = Math.max(0, Math.min(r, w/2, h/2));
+    if(c.roundRect){ c.beginPath(); c.roundRect(x,y,w,h,r); return; }
+    c.beginPath();
+    c.moveTo(x+r,y);
+    c.arcTo(x+w,y,x+w,y+h,r);
+    c.arcTo(x+w,y+h,x,y+h,r);
+    c.arcTo(x,y+h,x,y,r);
+    c.arcTo(x,y,x+w,y,r);
+    c.closePath();
+  }
+
+  function drawTag(c, cfg, text, imgW, imgH, marginPx, prev){
+    if(!text || !text.trim()) return null;
+    const fontSize = Math.max(8, imgH * (cfg.fontSizePct/100));
+    const weight = cfg.bold ? "700" : "400";
+    const styleStr = cfg.italic ? "italic" : "normal";
+    c.font = `${styleStr} ${weight} ${fontSize}px "${cfg.fontFamily}"`;
+    c.textBaseline = "alphabetic";
+
+    const metrics = c.measureText(text);
+    const ascent = metrics.actualBoundingBoxAscent || fontSize*0.76;
+    const descent = metrics.actualBoundingBoxDescent || fontSize*0.22;
+    const textW = metrics.width;
+
+    const padX = fontSize * 0.55 * cfg.padding;
+    const padY = fontSize * 0.32 * cfg.padding;
+    const boxW = textW + padX*2;
+    const boxH = ascent + descent + padY*2;
+
+    const isLeft = cfg.corner.includes("left");
+    const isTop = cfg.corner.includes("top");
+
+    let x = isLeft ? marginPx : imgW - marginPx - boxW;
+    let y = isTop ? marginPx : imgH - marginPx - boxH;
+
+    if(prev && prev.corner === cfg.corner){
+      const gap = fontSize * 0.45;
+      y = isTop ? (prev.y + prev.boxH + gap) : (prev.y - gap - boxH);
+    }
+
+    c.fillStyle = cfg.boxColor;
+    roundRectPath(c, x, y, boxW, boxH, fontSize*0.16);
+    c.fill();
+
+    c.fillStyle = cfg.textColor;
+    const textX = x + padX;
+    const textY = y + padY + ascent;
+    c.fillText(text, textX, textY);
+
+    if(cfg.underline){
+      const uY = textY + descent*0.45;
+      c.strokeStyle = cfg.textColor;
+      c.lineWidth = Math.max(1, fontSize*0.045);
+      c.beginPath();
+      c.moveTo(textX, uY);
+      c.lineTo(textX+textW, uY);
+      c.stroke();
+    }
+
+    return { x, y, boxW, boxH, corner: cfg.corner };
+  }
+
+  function render(){
+    if(!state.image.el) return;
+    const { el, width, height } = state.image;
+    canvas.width = width;
+    canvas.height = height;
+    ctx.clearRect(0,0,width,height);
+    ctx.drawImage(el, 0, 0, width, height);
+
+    const marginPx = Math.max(width, height) * 0.035;
+    let prev = null;
+
+    if(state.label.enabled){
+      const box = drawTag(ctx, state.label, state.label.text, width, height, marginPx, prev);
+      if(box) prev = box;
+    }
+    if(state.price.enabled){
+      const priceText = formatPrice(state.price.amount, state.price.currency);
+      drawTag(ctx, state.price, priceText, width, height, marginPx, prev);
+    }
+  }
+
+  // re-render once fonts are ready so metrics are accurate
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(render);
+  }
+
+  /* ---------------- download modal ---------------- */
+  const modalBackdrop = $("modalBackdrop");
+  const filenameInput = $("filenameInput");
+
+  downloadBtn.addEventListener("click", () => {
+    if(!state.image.el) return;
+    modalBackdrop.classList.add("open");
+    filenameInput.focus();
+    filenameInput.select();
+  });
+  $("cancelDownload").addEventListener("click", () => modalBackdrop.classList.remove("open"));
+  modalBackdrop.addEventListener("click", (e) => { if(e.target === modalBackdrop) modalBackdrop.classList.remove("open"); });
+
+  $("confirmDownload").addEventListener("click", () => {
+    let name = filenameInput.value.trim() || "pinterest-pin";
+    name = name.replace(/[^a-z0-9\-_ ]/gi, "").trim() || "pinterest-pin";
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name.endsWith(".jpg") ? name : name + ".jpg";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      modalBackdrop.classList.remove("open");
+    }, "image/jpeg", 0.92);
+  });
+
+  filenameInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter") $("confirmDownload").click();
+    if(e.key === "Escape") modalBackdrop.classList.remove("open");
+  });
+
+})();
+</script>
+</body>
+</html>
