@@ -166,6 +166,15 @@
   .color-field{display:flex;align-items:center;gap:8px;}
   .color-field label{margin:0;font-size:12px;color:var(--muted);flex:1;}
 
+  .quick-colors{display:flex;gap:8px;margin-top:2px;}
+  .swatch{
+    width:26px;height:26px;border-radius:50%;
+    border:1.5px solid var(--border);cursor:pointer;padding:0;
+    transition:transform .12s ease,border-color .12s ease;
+  }
+  .swatch:hover{transform:scale(1.1);border-color:var(--muted);}
+  .swatch:active{transform:scale(.96);}
+
   .segmented{
     display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;
   }
@@ -372,8 +381,8 @@
         </div>
 
         <div class="field">
-          <div class="range-label"><span>Text size</span><span id="labelSizeVal">6%</span></div>
-          <input type="range" id="labelSize" min="1" max="20" step="0.5" value="6" />
+          <div class="range-label"><span>Text size</span><span id="labelSizeVal">3%</span></div>
+          <input type="range" id="labelSize" min="1" max="20" step="0.5" value="3" />
         </div>
 
         <div class="field">
@@ -393,11 +402,20 @@
         <div class="row">
           <div class="field color-field">
             <label for="labelTextColor">Text</label>
-            <input type="color" id="labelTextColor" value="#191305" />
+            <input type="color" id="labelTextColor" value="#f3ecd9" />
           </div>
           <div class="field color-field">
             <label for="labelBoxColor">Box</label>
-            <input type="color" id="labelBoxColor" value="#ffb627" />
+            <input type="color" id="labelBoxColor" value="#2e4a44" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Quick box colours</label>
+          <div class="quick-colors" data-input="labelBoxColor">
+            <button type="button" class="swatch" style="background:#2e4a44" data-color="#2e4a44" aria-label="Deep teal"></button>
+            <button type="button" class="swatch" style="background:#6e8f86" data-color="#6e8f86" aria-label="Light teal"></button>
+            <button type="button" class="swatch" style="background:#ede1cc" data-color="#ede1cc" aria-label="Beige"></button>
+            <button type="button" class="swatch" style="background:#c9b79c" data-color="#c9b79c" aria-label="Dark beige"></button>
           </div>
         </div>
       </div>
@@ -454,8 +472,8 @@
         </div>
 
         <div class="field">
-          <div class="range-label"><span>Text size</span><span id="priceSizeVal">4%</span></div>
-          <input type="range" id="priceSize" min="1" max="20" step="0.5" value="4" />
+          <div class="range-label"><span>Text size</span><span id="priceSizeVal">3%</span></div>
+          <input type="range" id="priceSize" min="1" max="20" step="0.5" value="3" />
         </div>
 
         <div class="field">
@@ -475,11 +493,20 @@
         <div class="row">
           <div class="field color-field">
             <label for="priceTextColor">Text</label>
-            <input type="color" id="priceTextColor" value="#f4f2ec" />
+            <input type="color" id="priceTextColor" value="#2e4a44" />
           </div>
           <div class="field color-field">
             <label for="priceBoxColor">Box</label>
-            <input type="color" id="priceBoxColor" value="#191305" />
+            <input type="color" id="priceBoxColor" value="#ede1cc" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Quick box colours</label>
+          <div class="quick-colors" data-input="priceBoxColor">
+            <button type="button" class="swatch" style="background:#2e4a44" data-color="#2e4a44" aria-label="Deep teal"></button>
+            <button type="button" class="swatch" style="background:#6e8f86" data-color="#6e8f86" aria-label="Light teal"></button>
+            <button type="button" class="swatch" style="background:#ede1cc" data-color="#ede1cc" aria-label="Beige"></button>
+            <button type="button" class="swatch" style="background:#c9b79c" data-color="#c9b79c" aria-label="Dark beige"></button>
           </div>
         </div>
       </div>
@@ -529,13 +556,13 @@
     image: { el:null, width:0, height:0, name:"" },
     label: {
       enabled:true, text:"MODERN DESIGN", corner:"top-left",
-      fontFamily:"Fraunces", fontSizePct:6, bold:true, italic:false, underline:false,
-      textColor:"#191305", boxColor:"#ffb627", padding:1
+      fontFamily:"Fraunces", fontSizePct:3, bold:true, italic:false, underline:false,
+      textColor:"#f3ecd9", boxColor:"#2e4a44", padding:1
     },
     price: {
       enabled:true, amount:29.99, currency:"USD", corner:"bottom-right",
-      fontFamily:"IBM Plex Mono", fontSizePct:4, bold:true, italic:false, underline:false,
-      textColor:"#f4f2ec", boxColor:"#191305", padding:1
+      fontFamily:"IBM Plex Mono", fontSizePct:3, bold:true, italic:false, underline:false,
+      textColor:"#2e4a44", boxColor:"#ede1cc", padding:1
     }
   };
 
@@ -571,12 +598,15 @@
   function formatPrice(amountUSD, code){
     const rate = rates[code] ?? 1;
     const converted = amountUSD * rate;
+    let symbol = code;
     try{
-      return new Intl.NumberFormat("en-US", { style:"currency", currency:code,
-        maximumFractionDigits: code === "JPY" ? 0 : 2 }).format(converted);
-    }catch(e){
-      return "$" + converted.toFixed(2);
-    }
+      const parts = new Intl.NumberFormat("en-US", { style:"currency", currency:code }).formatToParts(0);
+      const currencyPart = parts.find(p => p.type === "currency");
+      if(currencyPart) symbol = currencyPart.value;
+    }catch(e){ /* keep code as symbol fallback */ }
+    const decimals = (code === "JPY") ? 0 : (Number.isInteger(converted) ? 0 : 2);
+    const numStr = converted.toLocaleString("en-US", { minimumFractionDigits:decimals, maximumFractionDigits:decimals });
+    return `${code} ${symbol}${numStr}`;
   }
 
   async function fetchRates(){
@@ -697,6 +727,20 @@
   bindColor("labelBoxColor", state.label, "boxColor");
   bindToggle("labelEnabled", state.label, "enabled", "labelControls");
   bindCornerPicker(document.querySelector('.corner-picker[data-target="label"]'), state.label);
+
+  function bindQuickColors(){
+    document.querySelectorAll(".quick-colors").forEach(group => {
+      const inputId = group.dataset.input;
+      const input = $(inputId);
+      group.querySelectorAll(".swatch").forEach(btn => {
+        btn.addEventListener("click", () => {
+          input.value = btn.dataset.color;
+          input.dispatchEvent(new Event("input"));
+        });
+      });
+    });
+  }
+  bindQuickColors();
 
   bindNumber("priceAmount", state.price, "amount");
   bindSelect("priceCurrency", state.price, "currency");
