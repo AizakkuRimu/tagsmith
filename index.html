@@ -518,7 +518,7 @@
 
       <div class="field color-field">
         <label for="priceStyleTextColor">Text colour (both tags)</label>
-        <input type="color" id="priceStyleTextColor" value="#2e4a44" />
+        <input type="color" id="priceStyleTextColor" value="#f3ecd9" />
       </div>
 
       <!-- Usual price -->
@@ -537,10 +537,11 @@
           </div>
           <div class="field color-field" style="flex:none;align-items:flex-end;">
             <label for="upBoxColor" style="margin:0 0 6px;">Box</label>
-            <input type="color" id="upBoxColor" value="#ede1cc" />
+            <input type="color" id="upBoxColor" value="#2e4a44" />
           </div>
         </div>
         <div class="quick-colors" data-input="upBoxColor">
+          <button type="button" class="swatch" style="background:#2e4a44" data-color="#2e4a44" aria-label="Dark green (matches label)"></button>
           <button type="button" class="swatch" style="background:#ede1cc" data-color="#ede1cc" aria-label="Beige"></button>
           <button type="button" class="swatch" style="background:#c9b79c" data-color="#c9b79c" aria-label="Dark beige"></button>
           <button type="button" class="swatch" style="background:#f7f1e6" data-color="#f7f1e6" aria-label="Cream"></button>
@@ -564,10 +565,11 @@
           </div>
           <div class="field color-field" style="flex:none;align-items:flex-end;">
             <label for="ppBoxColor" style="margin:0 0 6px;">Box</label>
-            <input type="color" id="ppBoxColor" value="#b6d7a8" />
+            <input type="color" id="ppBoxColor" value="#2e4a44" />
           </div>
         </div>
         <div class="quick-colors" data-input="ppBoxColor">
+          <button type="button" class="swatch" style="background:#2e4a44" data-color="#2e4a44" aria-label="Dark green (matches label)"></button>
           <button type="button" class="swatch" style="background:#b6d7a8" data-color="#b6d7a8" aria-label="Light green"></button>
           <button type="button" class="swatch" style="background:#8fbc8f" data-color="#8fbc8f" aria-label="Sage green"></button>
           <button type="button" class="swatch" style="background:#d9ead3" data-color="#d9ead3" aria-label="Pale mint"></button>
@@ -661,10 +663,10 @@
   const PRICE_STYLE_DEFAULTS = {
     corner:"bottom-left", fontFamily:"Poppins", fontSizePct:4, padding:0.4,
     bold:true, italic:false, underline:false,
-    textColor:"#2e4a44", currency:"USD"
+    textColor:"#f3ecd9", currency:"USD"
   };
-  const UP_BOX_DEFAULT = "#ede1cc";
-  const PP_BOX_DEFAULT = "#b6d7a8";
+  const UP_BOX_DEFAULT = "#2e4a44";
+  const PP_BOX_DEFAULT = "#2e4a44";
 
   /* ---------------- state ---------------- */
   const state = {
