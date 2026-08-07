@@ -1241,14 +1241,28 @@
     return (s || "").toLowerCase().replace(/[^a-z0-9\-_ ]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
   }
 
-  function formatPriceCell(prefix, raw, currencyCode){
+  function formatPriceCell(prefix, raw, currencyCode, strict){
     raw = (raw || "").trim();
     if(!raw) return null;
-    const cleaned = raw.replace(/[^0-9.\-]/g, "");
+
+    const hadTilde = raw.includes("~");
+    const cleaned = raw.replace(/~/g, "").replace(/[^0-9.\-]/g, "");
     const num = parseFloat(cleaned);
-    if(!isNaN(num) && cleaned !== "" && cleaned !== "-" && cleaned !== "."){
-      return `${prefix} ${formatPrice(num, currencyCode)}`;
+    const isNumber = !isNaN(num) && cleaned !== "" && cleaned !== "-" && cleaned !== ".";
+
+    if(isNumber){
+      const rounded = Math.ceil(num);
+      const wasRounded = rounded !== num; // not already a flat whole-dollar amount
+      const showTilde = hadTilde || wasRounded;
+      return `${prefix} ${formatPrice(rounded, currencyCode)}${showTilde ? "~" : ""}`;
     }
+
+    if(strict){
+      // Not a recognizable number (e.g. blank/non-numeric Prime cell) — treat as no value,
+      // which skips drawing this tag entirely (effectively "off" for this row).
+      return null;
+    }
+
     // Not a recognizable number — show the raw cell text as-is so nothing is silently dropped.
     return `${prefix} ${raw}`;
   }
@@ -1301,7 +1315,7 @@
         }
       }
       if(state.primePrice.enabled){
-        const text = formatPriceCell(state.primePrice.prefix, row.primeRaw, state.priceStyle.currency);
+        const text = formatPriceCell(state.primePrice.prefix, row.primeRaw, state.priceStyle.currency, true);
         if(text){
           const cfg = mergePriceCfg(state.primePrice);
           drawTag(octx, cfg, text, img.width, img.height, marginPx, prev);
