@@ -518,7 +518,7 @@
 
       <div class="field color-field">
         <label for="priceStyleTextColor">Text colour (both tags)</label>
-        <input type="color" id="priceStyleTextColor" value="#f3ecd9" />
+        <input type="color" id="priceStyleTextColor" value="#2e4a44" />
       </div>
 
       <!-- Usual price -->
@@ -537,11 +537,10 @@
           </div>
           <div class="field color-field" style="flex:none;align-items:flex-end;">
             <label for="upBoxColor" style="margin:0 0 6px;">Box</label>
-            <input type="color" id="upBoxColor" value="#2e4a44" />
+            <input type="color" id="upBoxColor" value="#ede1cc" />
           </div>
         </div>
         <div class="quick-colors" data-input="upBoxColor">
-          <button type="button" class="swatch" style="background:#2e4a44" data-color="#2e4a44" aria-label="Dark green (matches label)"></button>
           <button type="button" class="swatch" style="background:#ede1cc" data-color="#ede1cc" aria-label="Beige"></button>
           <button type="button" class="swatch" style="background:#c9b79c" data-color="#c9b79c" aria-label="Dark beige"></button>
           <button type="button" class="swatch" style="background:#f7f1e6" data-color="#f7f1e6" aria-label="Cream"></button>
@@ -565,11 +564,10 @@
           </div>
           <div class="field color-field" style="flex:none;align-items:flex-end;">
             <label for="ppBoxColor" style="margin:0 0 6px;">Box</label>
-            <input type="color" id="ppBoxColor" value="#2e4a44" />
+            <input type="color" id="ppBoxColor" value="#b6d7a8" />
           </div>
         </div>
         <div class="quick-colors" data-input="ppBoxColor">
-          <button type="button" class="swatch" style="background:#2e4a44" data-color="#2e4a44" aria-label="Dark green (matches label)"></button>
           <button type="button" class="swatch" style="background:#b6d7a8" data-color="#b6d7a8" aria-label="Light green"></button>
           <button type="button" class="swatch" style="background:#8fbc8f" data-color="#8fbc8f" aria-label="Sage green"></button>
           <button type="button" class="swatch" style="background:#d9ead3" data-color="#d9ead3" aria-label="Pale mint"></button>
@@ -663,10 +661,10 @@
   const PRICE_STYLE_DEFAULTS = {
     corner:"bottom-left", fontFamily:"Poppins", fontSizePct:4, padding:0.4,
     bold:true, italic:false, underline:false,
-    textColor:"#f3ecd9", currency:"USD"
+    textColor:"#2e4a44", currency:"USD"
   };
-  const UP_BOX_DEFAULT = "#2e4a44";
-  const PP_BOX_DEFAULT = "#2e4a44";
+  const UP_BOX_DEFAULT = "#ede1cc";
+  const PP_BOX_DEFAULT = "#b6d7a8";
 
   /* ---------------- state ---------------- */
   const state = {
@@ -1120,10 +1118,11 @@
     return { ...state.priceStyle, boxColor: sub.boxColor };
   }
 
-  // Draws a price tag as two stacked-together segments in one box:
-  // the prefix ("U.P." / "Prime Member P.") styled like the label/text tag
-  // (its font family + colour), and the amount styled with the price style —
-  // both sized to match the price's font size, sitting side by side.
+  // Draws a price tag as two SEPARATE, adjacent boxes:
+  // a prefix box ("U.P." / "Prime Member P.") styled like the label/text tag
+  // (its box colour + font + text colour), and a price box styled with the
+  // price style's own box colour/font/text colour — sitting side by side,
+  // both sized to match the price's font size.
   function drawPriceTag(c, priceCfg, prefixText, amountText, imgW, imgH, marginPx, prev){
     if(!amountText || !amountText.trim()) return null;
 
@@ -1147,6 +1146,7 @@
     const priceMetrics = c.measureText(amountText);
     const priceW = priceMetrics.width;
 
+    // Shared ascent/descent so both boxes end up the same height and align.
     let ascent = priceMetrics.actualBoundingBoxAscent || fontSize*0.76;
     let descent = priceMetrics.actualBoundingBoxDescent || fontSize*0.22;
     if(hasPrefix){
@@ -1154,17 +1154,19 @@
       descent = Math.max(descent, prefixMetrics.actualBoundingBoxDescent || fontSize*0.22);
     }
 
-    const gap = hasPrefix ? fontSize * 0.32 : 0;
     const padX = fontSize * 0.55 * priceCfg.padding;
     const padY = fontSize * 0.32 * priceCfg.padding;
-    const contentW = prefixW + gap + priceW;
-    const boxW = contentW + padX*2;
     const boxH = ascent + descent + padY*2;
+    const boxGap = fontSize * 0.22; // small gap between the two separate boxes
+
+    const priceBoxW = priceW + padX*2;
+    const prefixBoxW = hasPrefix ? (prefixW + padX*2) : 0;
+    const totalW = prefixBoxW + (hasPrefix ? boxGap : 0) + priceBoxW;
 
     const isLeft = priceCfg.corner.includes("left");
     const isTop = priceCfg.corner.includes("top");
 
-    let x = isLeft ? marginPx : imgW - marginPx - boxW;
+    let x = isLeft ? marginPx : imgW - marginPx - totalW;
     let y = isTop ? marginPx : imgH - marginPx - boxH;
 
     if(prev && prev.corner === priceCfg.corner){
@@ -1172,37 +1174,43 @@
       y = isTop ? (prev.y + prev.boxH + stackGap) : (prev.y - stackGap - boxH);
     }
 
-    c.fillStyle = priceCfg.boxColor;
-    roundRectPath(c, x, y, boxW, boxH, fontSize*0.16);
-    c.fill();
-
     const textY = y + padY + ascent;
-    let cursorX = x + padX;
+    let cursorX = x;
 
     if(hasPrefix){
+      c.fillStyle = labelCfg.boxColor;
+      roundRectPath(c, cursorX, y, prefixBoxW, boxH, fontSize*0.16);
+      c.fill();
+
       c.font = prefixFont;
       c.fillStyle = labelCfg.textColor;
-      c.fillText(prefixText, cursorX, textY);
+      const prefixTextX = cursorX + padX;
+      c.fillText(prefixText, prefixTextX, textY);
       if(labelCfg.underline){
         const uY = textY + descent*0.45;
         c.strokeStyle = labelCfg.textColor;
         c.lineWidth = Math.max(1, fontSize*0.045);
-        c.beginPath(); c.moveTo(cursorX, uY); c.lineTo(cursorX+prefixW, uY); c.stroke();
+        c.beginPath(); c.moveTo(prefixTextX, uY); c.lineTo(prefixTextX+prefixW, uY); c.stroke();
       }
-      cursorX += prefixW + gap;
+      cursorX += prefixBoxW + boxGap;
     }
+
+    c.fillStyle = priceCfg.boxColor;
+    roundRectPath(c, cursorX, y, priceBoxW, boxH, fontSize*0.16);
+    c.fill();
 
     c.font = priceFont;
     c.fillStyle = priceCfg.textColor;
-    c.fillText(amountText, cursorX, textY);
+    const priceTextX = cursorX + padX;
+    c.fillText(amountText, priceTextX, textY);
     if(priceCfg.underline){
       const uY = textY + descent*0.45;
       c.strokeStyle = priceCfg.textColor;
       c.lineWidth = Math.max(1, fontSize*0.045);
-      c.beginPath(); c.moveTo(cursorX, uY); c.lineTo(cursorX+priceW, uY); c.stroke();
+      c.beginPath(); c.moveTo(priceTextX, uY); c.lineTo(priceTextX+priceW, uY); c.stroke();
     }
 
-    return { x, y, boxW, boxH, corner: priceCfg.corner };
+    return { x, y, boxW: totalW, boxH, corner: priceCfg.corner };
   }
 
   function render(){
