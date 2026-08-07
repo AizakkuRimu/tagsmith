@@ -4,11 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Tagsmith — turn product photos into Pinterest pins</title>
-<meta name="description" content="Drop in an Amazon product photo, add a label and a price tag, and export a Pinterest-ready pin." />
+<meta name="description" content="Drop in Amazon product photos, add a label and price tags, and batch-export Pinterest-ready pins." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23ffb627' stroke-width='4'%3E%3Cpath d='M8 28 28 8h28v28L36 56a4 4 0 0 1-5.7 0L8 33.7a4 4 0 0 1 0-5.7Z'/%3E%3Ccircle cx='42' cy='22' r='4' fill='%23ffb627'/%3E%3C/g%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;0,900;1,600;1,900&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Space+Grotesk:wght@400;500;700&family=Poppins:wght@400;600;700&family=Inter:wght@400;500;600;700&family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
     --bg:#101012;
@@ -36,7 +37,7 @@
     -webkit-font-smoothing:antialiased;
   }
   button{font-family:inherit;}
-  input,select{font-family:inherit;}
+  input,select,textarea{font-family:inherit;}
   ::selection{background:var(--accent);color:var(--accent-ink);}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 
@@ -66,7 +67,7 @@
     background:var(--panel-alt);color:var(--ink);
     padding:10px 16px;border-radius:8px;
     font-size:13.5px;font-weight:600;
-    display:inline-flex;align-items:center;gap:8px;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
     cursor:pointer;transition:all .15s ease;
   }
   .btn:hover{border-color:var(--muted-2);}
@@ -76,6 +77,7 @@
   .btn--accent:hover{filter:brightness(1.06);}
   .btn:disabled{opacity:.4;cursor:not-allowed;}
   .btn svg{width:15px;height:15px;flex:none;}
+  .btn--ghost{background:transparent;}
 
   /* ---------- layout ---------- */
   .app{
@@ -126,16 +128,20 @@
   }
   .field input[type="text"],
   .field input[type="number"],
-  .field select{
+  .field select,
+  .field textarea{
     width:100%;padding:9px 10px;border-radius:7px;
     border:1px solid var(--border);background:var(--panel-alt);
     color:var(--ink);font-size:13.5px;
   }
+  .field textarea{resize:vertical;font-size:12px;font-family:var(--font-mono);line-height:1.5;}
   .field input[type="text"]:focus,
   .field input[type="number"]:focus,
-  .field select:focus{border-color:var(--accent);}
+  .field select:focus,
+  .field textarea:focus{border-color:var(--accent);}
   .row{display:flex;gap:10px;}
   .row > *{flex:1;min-width:0;}
+  .row-3 > *{flex:1;min-width:0;}
 
   input[type="range"]{
     -webkit-appearance:none;width:100%;height:4px;
@@ -166,7 +172,7 @@
   .color-field{display:flex;align-items:center;gap:8px;}
   .color-field label{margin:0;font-size:12px;color:var(--muted);flex:1;}
 
-  .quick-colors{display:flex;gap:8px;margin-top:2px;}
+  .quick-colors{display:flex;gap:8px;margin-top:8px;}
   .swatch{
     width:26px;height:26px;border-radius:50%;
     border:1.5px solid var(--border);cursor:pointer;padding:0;
@@ -239,12 +245,45 @@
   .dropzone p{margin:0;font-size:13px;color:var(--muted);}
   .dropzone strong{color:var(--ink);font-weight:600;}
   .dropzone input{display:none;}
-  .file-meta{
-    display:flex;justify-content:space-between;align-items:center;
-    margin-top:10px;font-size:11.5px;color:var(--muted);
-    font-family:var(--font-mono);
+
+  /* ---------- image thumbnail list ---------- */
+  .thumb-list{margin-top:14px;display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;}
+  .thumb-item{
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;
+    padding:6px 8px;
   }
-  .file-meta a{color:var(--accent);text-decoration:none;font-family:var(--font-body);font-weight:600;}
+  .thumb-item.is-active{border-color:var(--accent);}
+  .thumb-badge{
+    flex:none;width:20px;height:20px;border-radius:50%;
+    background:rgba(255,182,39,.16);color:var(--accent);
+    font-family:var(--font-mono);font-size:11px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .thumb-item img, .thumb-placeholder{
+    width:38px;height:38px;object-fit:cover;border-radius:5px;flex:none;background:var(--mat);
+  }
+  .thumb-placeholder{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;}
+  .thumb-name{
+    flex:1;min-width:0;font-size:11.5px;color:var(--muted);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .thumb-actions{display:flex;gap:3px;flex:none;}
+  .thumb-btn{
+    appearance:none;border:1px solid var(--border);background:var(--panel);
+    color:var(--muted);width:22px;height:22px;border-radius:5px;
+    font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    padding:0;
+  }
+  .thumb-btn:hover{border-color:var(--accent);color:var(--ink);}
+  .thumb-btn:disabled{opacity:.3;cursor:not-allowed;}
+
+  /* ---------- price sub-block ---------- */
+  .price-subblock{
+    border:1px solid var(--border-soft);border-radius:9px;
+    padding:14px;margin-top:16px;background:rgba(255,255,255,.015);
+  }
+  .price-subblock .toggle-row{margin-bottom:12px;}
 
   /* ---------- canvas stage ---------- */
   .canvas-wrap{
@@ -308,12 +347,12 @@
     </svg>
     <div class="brand__text">
       <span class="brand__name">Tagsmith</span>
-      <span class="brand__tag">Product photo → Pinterest pin</span>
+      <span class="brand__tag">Product photos → Pinterest pins</span>
     </div>
   </div>
   <button class="btn btn--accent" id="downloadBtn" disabled>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
-    Download JPEG
+    Download this photo
   </button>
 </header>
 
@@ -322,19 +361,17 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
 
-    <!-- STEP 1 — PHOTO -->
+    <!-- STEP 1 — PHOTOS -->
     <section class="section">
-      <div class="eyebrow"><span class="eyebrow__num">1</span> Product photo</div>
-      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload product photo">
+      <div class="eyebrow"><span class="eyebrow__num">1</span> Product photos</div>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload product photos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
-        <p><strong>Click to upload</strong> or drag a photo here</p>
-        <p style="margin-top:4px;">JPG or PNG, any size</p>
-        <input type="file" id="fileInput" accept="image/*" />
+        <p><strong>Click to upload</strong> or drag photos here</p>
+        <p style="margin-top:4px;">JPG or PNG · select multiple at once</p>
+        <input type="file" id="fileInput" accept="image/*" multiple />
       </div>
-      <div class="file-meta" id="fileMeta" style="display:none;">
-        <span id="fileDims">—</span>
-        <a href="#" id="replaceLink">Replace</a>
-      </div>
+      <div class="thumb-list" id="thumbList"></div>
+      <p class="note" id="imagesNote">No photos yet. The first photo you add becomes the template you style below — that exact style is stamped onto every photo during batch export. Use ↑ / ↓ to reorder, ✎ to preview/edit a different photo, ✕ to remove.</p>
     </section>
 
     <!-- STEP 2 — LABEL TAG -->
@@ -352,17 +389,17 @@
       <div id="labelControls">
         <div class="field">
           <label for="labelText">Text</label>
-          <input type="text" id="labelText" maxlength="40" value="MODERN DESIGN" />
+          <input type="text" id="labelText" maxlength="60" value="MODERN DESIGN" />
         </div>
 
         <div class="field">
           <label>Corner position</label>
           <div class="corner-picker" data-target="label">
             <div class="corner-picker__frame">
-              <button class="eyelet" data-corner="top-left" aria-label="Top left"></button>
-              <button class="eyelet" data-corner="top-right" aria-label="Top right"></button>
-              <button class="eyelet" data-corner="bottom-left" aria-label="Bottom left"></button>
-              <button class="eyelet" data-corner="bottom-right" aria-label="Bottom right"></button>
+              <button type="button" class="eyelet" data-corner="top-left" aria-label="Top left"></button>
+              <button type="button" class="eyelet" data-corner="top-right" aria-label="Top right"></button>
+              <button type="button" class="eyelet" data-corner="bottom-left" aria-label="Bottom left"></button>
+              <button type="button" class="eyelet" data-corner="bottom-right" aria-label="Bottom right"></button>
             </div>
           </div>
         </div>
@@ -381,7 +418,7 @@
         </div>
 
         <div class="field">
-          <div class="range-label"><span>Text size</span><span id="labelSizeVal">3%</span></div>
+          <div class="range-label"><span>Text size</span><span id="labelSizeVal">3.0%</span></div>
           <input type="range" id="labelSize" min="1" max="20" step="0.5" value="3" />
         </div>
 
@@ -418,49 +455,32 @@
             <button type="button" class="swatch" style="background:#c9b79c" data-color="#c9b79c" aria-label="Dark beige"></button>
           </div>
         </div>
+
+        <button type="button" class="btn" id="resetLabelDefaults" style="width:100%;margin-top:16px;">Reset label tag to default</button>
       </div>
     </section>
 
-    <!-- STEP 3 — PRICE TAG -->
+    <!-- STEP 3 — PRICE TAGS -->
     <section class="section">
-      <div class="eyebrow"><span class="eyebrow__num">3</span> Price tag</div>
+      <div class="eyebrow"><span class="eyebrow__num">3</span> Price tags</div>
+      <p class="note" style="margin:-4px 0 14px;">Usual Price and Amazon Prime Price share the same position, font, size and padding — only the amount, box colour and on/off switch are separate.</p>
 
-      <div class="toggle-row">
-        <div class="field"><label style="margin:0;">Show price</label></div>
-        <label class="switch">
-          <input type="checkbox" id="priceEnabled" checked>
-          <span class="track"></span><span class="knob"></span>
-        </label>
+      <div class="field">
+        <label>Corner position (both tags)</label>
+        <div class="corner-picker" data-target="priceStyle">
+          <div class="corner-picker__frame">
+            <button type="button" class="eyelet" data-corner="top-left" aria-label="Top left"></button>
+            <button type="button" class="eyelet" data-corner="top-right" aria-label="Top right"></button>
+            <button type="button" class="eyelet" data-corner="bottom-left" aria-label="Bottom left"></button>
+            <button type="button" class="eyelet" data-corner="bottom-right" aria-label="Bottom right"></button>
+          </div>
+        </div>
       </div>
 
-      <div id="priceControls">
-        <div class="row">
-          <div class="field">
-            <label for="priceAmount">Price (USD)</label>
-            <input type="number" id="priceAmount" min="0" step="0.01" value="29.99" />
-          </div>
-          <div class="field">
-            <label for="priceCurrency">Show as</label>
-            <select id="priceCurrency"></select>
-          </div>
-        </div>
-        <p class="note" id="rateNote">Fetching live exchange rates…</p>
-
+      <div class="row">
         <div class="field">
-          <label>Corner position</label>
-          <div class="corner-picker" data-target="price">
-            <div class="corner-picker__frame">
-              <button class="eyelet" data-corner="top-left" aria-label="Top left"></button>
-              <button class="eyelet" data-corner="top-right" aria-label="Top right"></button>
-              <button class="eyelet" data-corner="bottom-left" aria-label="Bottom left"></button>
-              <button class="eyelet" data-corner="bottom-right" aria-label="Bottom right"></button>
-            </div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="priceFont">Font</label>
-          <select id="priceFont">
+          <label for="priceStyleFont">Font</label>
+          <select id="priceStyleFont">
             <option value="Poppins" selected>Poppins — sans</option>
             <option value="Space Grotesk">Space Grotesk — sans</option>
             <option value="Inter">Inter — sans</option>
@@ -470,46 +490,127 @@
             <option value="Playfair Display">Playfair Display — serif</option>
           </select>
         </div>
-
         <div class="field">
-          <div class="range-label"><span>Text size</span><span id="priceSizeVal">3%</span></div>
-          <input type="range" id="priceSize" min="1" max="20" step="0.5" value="3" />
-        </div>
-
-        <div class="field">
-          <div class="range-label"><span>Box padding</span><span id="pricePadVal">1.0×</span></div>
-          <input type="range" id="pricePad" min="0.4" max="2.2" step="0.1" value="1" />
-        </div>
-
-        <div class="field">
-          <label>Style</label>
-          <div class="segmented">
-            <button type="button" class="is-b active" data-style="bold">B</button>
-            <button type="button" class="is-i" data-style="italic">I</button>
-            <button type="button" class="is-u" data-style="underline">U</button>
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="field color-field">
-            <label for="priceTextColor">Text</label>
-            <input type="color" id="priceTextColor" value="#2e4a44" />
-          </div>
-          <div class="field color-field">
-            <label for="priceBoxColor">Box</label>
-            <input type="color" id="priceBoxColor" value="#ede1cc" />
-          </div>
-        </div>
-        <div class="field">
-          <label>Quick box colours</label>
-          <div class="quick-colors" data-input="priceBoxColor">
-            <button type="button" class="swatch" style="background:#2e4a44" data-color="#2e4a44" aria-label="Deep teal"></button>
-            <button type="button" class="swatch" style="background:#6e8f86" data-color="#6e8f86" aria-label="Light teal"></button>
-            <button type="button" class="swatch" style="background:#ede1cc" data-color="#ede1cc" aria-label="Beige"></button>
-            <button type="button" class="swatch" style="background:#c9b79c" data-color="#c9b79c" aria-label="Dark beige"></button>
-          </div>
+          <label for="priceCurrency">Currency</label>
+          <select id="priceCurrency"></select>
         </div>
       </div>
+      <p class="note" id="rateNote">Fetching live exchange rates…</p>
+
+      <div class="field">
+        <div class="range-label"><span>Text size</span><span id="priceStyleSizeVal">4.0%</span></div>
+        <input type="range" id="priceStyleSize" min="1" max="20" step="0.5" value="4" />
+      </div>
+
+      <div class="field">
+        <div class="range-label"><span>Box padding</span><span id="priceStylePadVal">0.4×</span></div>
+        <input type="range" id="priceStylePad" min="0.4" max="2.2" step="0.1" value="0.4" />
+      </div>
+
+      <div class="field">
+        <label>Style</label>
+        <div class="segmented" id="priceStyleSeg">
+          <button type="button" class="is-b active" data-style="bold">B</button>
+          <button type="button" class="is-i" data-style="italic">I</button>
+          <button type="button" class="is-u" data-style="underline">U</button>
+        </div>
+      </div>
+
+      <div class="field color-field">
+        <label for="priceStyleTextColor">Text colour (both tags)</label>
+        <input type="color" id="priceStyleTextColor" value="#2e4a44" />
+      </div>
+
+      <!-- Usual price -->
+      <div class="price-subblock">
+        <div class="toggle-row">
+          <div class="field"><label style="margin:0;">Usual Price <span style="color:var(--muted-2);">(U.P.)</span></label></div>
+          <label class="switch">
+            <input type="checkbox" id="upEnabled" checked>
+            <span class="track"></span><span class="knob"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="upAmount">Amount (USD)</label>
+            <input type="number" id="upAmount" min="0" step="0.01" value="40.00" />
+          </div>
+          <div class="field color-field" style="flex:none;align-items:flex-end;">
+            <label for="upBoxColor" style="margin:0 0 6px;">Box</label>
+            <input type="color" id="upBoxColor" value="#ede1cc" />
+          </div>
+        </div>
+        <div class="quick-colors" data-input="upBoxColor">
+          <button type="button" class="swatch" style="background:#ede1cc" data-color="#ede1cc" aria-label="Beige"></button>
+          <button type="button" class="swatch" style="background:#c9b79c" data-color="#c9b79c" aria-label="Dark beige"></button>
+          <button type="button" class="swatch" style="background:#f7f1e6" data-color="#f7f1e6" aria-label="Cream"></button>
+          <button type="button" class="swatch" style="background:#d8c7a1" data-color="#d8c7a1" aria-label="Tan"></button>
+        </div>
+      </div>
+
+      <!-- Amazon Prime price -->
+      <div class="price-subblock">
+        <div class="toggle-row">
+          <div class="field"><label style="margin:0;">Amazon Prime Price <span style="color:var(--muted-2);">(Prime Member P.)</span></label></div>
+          <label class="switch">
+            <input type="checkbox" id="ppEnabled" checked>
+            <span class="track"></span><span class="knob"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="ppAmount">Amount (USD)</label>
+            <input type="number" id="ppAmount" min="0" step="0.01" value="35.00" />
+          </div>
+          <div class="field color-field" style="flex:none;align-items:flex-end;">
+            <label for="ppBoxColor" style="margin:0 0 6px;">Box</label>
+            <input type="color" id="ppBoxColor" value="#b6d7a8" />
+          </div>
+        </div>
+        <div class="quick-colors" data-input="ppBoxColor">
+          <button type="button" class="swatch" style="background:#b6d7a8" data-color="#b6d7a8" aria-label="Light green"></button>
+          <button type="button" class="swatch" style="background:#8fbc8f" data-color="#8fbc8f" aria-label="Sage green"></button>
+          <button type="button" class="swatch" style="background:#d9ead3" data-color="#d9ead3" aria-label="Pale mint"></button>
+          <button type="button" class="swatch" style="background:#6aa84f" data-color="#6aa84f" aria-label="Deep green"></button>
+        </div>
+      </div>
+
+      <button type="button" class="btn" id="resetPriceDefaults" style="width:100%;margin-top:16px;">Reset price tags to default</button>
+    </section>
+
+    <!-- STEP 4 — BATCH EXPORT -->
+    <section class="section">
+      <div class="eyebrow"><span class="eyebrow__num">4</span> Batch export from Excel</div>
+      <p class="note" style="margin:-4px 0 12px;">Paste rows copied straight from Excel (columns A–N). Row 1 of your paste uses photo 1 in your list above, row 2 uses photo 2, and so on — everything is drawn using the label &amp; price style you set above.</p>
+
+      <div class="field">
+        <label for="batchPaste">Pasted data</label>
+        <textarea id="batchPaste" rows="5" placeholder="Paste tab-separated rows from Excel here…"></textarea>
+      </div>
+
+      <div class="row row-3">
+        <div class="field">
+          <label for="colText">Text col</label>
+          <select id="colText"></select>
+        </div>
+        <div class="field">
+          <label for="colUP">U.P. col</label>
+          <select id="colUP"></select>
+        </div>
+        <div class="field">
+          <label for="colPP">Prime col</label>
+          <select id="colPP"></select>
+        </div>
+      </div>
+
+      <button type="button" class="btn" id="parseBatchBtn" style="width:100%;">Parse pasted data</button>
+      <p class="note" id="batchSummary">No data parsed yet.</p>
+
+      <button type="button" class="btn btn--accent" id="exportBatchBtn" style="width:100%;margin-top:10px;" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Export all as JPEGs (.zip)
+      </button>
+      <p class="note" id="batchProgress"></p>
     </section>
 
   </aside>
@@ -519,7 +620,7 @@
     <div class="empty-state" id="emptyState">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
       <h2>Your canvas is waiting</h2>
-      <p>Upload a product photo on the left to start building your pin. Both tags will scale and align automatically.</p>
+      <p>Upload product photos on the left to start building your pins. Tags will scale and align automatically.</p>
     </div>
     <div class="canvas-wrap" id="canvasWrap" style="display:none;">
       <canvas id="pinCanvas"></canvas>
@@ -551,19 +652,32 @@
 (function(){
   "use strict";
 
+  /* ---------------- style defaults (used by the reset buttons) ---------------- */
+  const LABEL_STYLE_DEFAULTS = {
+    corner:"top-right", fontFamily:"Playfair Display", fontSizePct:3, padding:1,
+    bold:true, italic:false, underline:false,
+    textColor:"#f3ecd9", boxColor:"#2e4a44"
+  };
+  const PRICE_STYLE_DEFAULTS = {
+    corner:"bottom-left", fontFamily:"Poppins", fontSizePct:4, padding:0.4,
+    bold:true, italic:false, underline:false,
+    textColor:"#2e4a44", currency:"USD"
+  };
+  const UP_BOX_DEFAULT = "#ede1cc";
+  const PP_BOX_DEFAULT = "#b6d7a8";
+
   /* ---------------- state ---------------- */
   const state = {
-    image: { el:null, width:0, height:0, name:"" },
+    images: [],       // {id, el, width, height, name, loading}
+    activeId: null,
     label: {
-      enabled:true, text:"MODERN DESIGN", corner:"top-left",
-      fontFamily:"Playfair Display", fontSizePct:3, bold:true, italic:false, underline:false,
-      textColor:"#f3ecd9", boxColor:"#2e4a44", padding:1
+      enabled:true, text:"MODERN DESIGN",
+      ...JSON.parse(JSON.stringify(LABEL_STYLE_DEFAULTS))
     },
-    price: {
-      enabled:true, amount:29.99, currency:"USD", corner:"bottom-right",
-      fontFamily:"Poppins", fontSizePct:3, bold:true, italic:false, underline:false,
-      textColor:"#2e4a44", boxColor:"#ede1cc", padding:1
-    }
+    priceStyle: JSON.parse(JSON.stringify(PRICE_STYLE_DEFAULTS)),
+    usualPrice: { enabled:true, amount:40.00, prefix:"U.P.", boxColor:UP_BOX_DEFAULT },
+    primePrice: { enabled:true, amount:35.00, prefix:"Prime Member P.", boxColor:PP_BOX_DEFAULT },
+    batchRows: []     // {label, usualRaw, primeRaw}
   };
 
   const CURRENCIES = [
@@ -575,25 +689,25 @@
   const FALLBACK_RATES = { USD:1, EUR:0.92, GBP:0.78, CAD:1.36, AUD:1.52, JPY:149,
     INR:83.3, MXN:17.0, BRL:5.4, SGD:1.34, AED:3.67, CHF:0.88, CNY:7.2 };
   let rates = { ...FALLBACK_RATES };
-  let ratesAreLive = false;
+
+  const LETTERS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N"];
 
   /* ---------------- dom refs ---------------- */
   const $ = (id) => document.getElementById(id);
   const canvas = $("pinCanvas");
   const ctx = canvas.getContext("2d");
-  const stage = $("stage");
   const emptyState = $("emptyState");
   const canvasWrap = $("canvasWrap");
   const downloadBtn = $("downloadBtn");
 
   /* ---------------- currency select ---------------- */
   const currencySelect = $("priceCurrency");
-  CURRENCIES.forEach(([code,name])=>{
+  CURRENCIES.forEach(([code])=>{
     const opt = document.createElement("option");
     opt.value = code; opt.textContent = code;
     currencySelect.appendChild(opt);
   });
-  currencySelect.value = "USD";
+  currencySelect.value = state.priceStyle.currency;
 
   function formatPrice(amountUSD, code){
     const rate = rates[code] ?? 1;
@@ -616,47 +730,158 @@
       if(!res.ok) throw new Error("bad response");
       const data = await res.json();
       rates = { USD:1, ...data.rates };
-      ratesAreLive = true;
       $("rateNote").textContent = "Live exchange rates, updated just now.";
     }catch(e){
-      ratesAreLive = false;
       $("rateNote").textContent = "Using approximate offline rates (live rates unavailable).";
     }
     render();
   }
   fetchRates();
 
-  /* ---------------- upload ---------------- */
+  /* ---------------- image management ---------------- */
+  let imgCounter = 0;
+
+  function getActiveImage(){
+    return state.images.find(i => i.id === state.activeId) || null;
+  }
+
+  function addImageFiles(fileList){
+    const files = Array.from(fileList).filter(f => f.type && f.type.startsWith("image/"));
+    if(!files.length) return;
+    // Create placeholders synchronously, in selection order, so the order never
+    // depends on which file happens to finish decoding first.
+    const placeholders = files.map((file) => {
+      const entry = { id: "img" + (++imgCounter), el:null, width:0, height:0, name:file.name, loading:true };
+      state.images.push(entry);
+      return entry;
+    });
+    if(!state.activeId) state.activeId = placeholders[0].id;
+    renderThumbs();
+    refreshBatchAvailability();
+
+    placeholders.forEach((entry, i) => {
+      const file = files[i];
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          entry.el = img; entry.width = img.naturalWidth; entry.height = img.naturalHeight; entry.loading = false;
+          renderThumbs();
+          refreshBatchAvailability();
+          emptyState.style.display = "none";
+          canvasWrap.style.display = "block";
+          downloadBtn.disabled = false;
+          if(state.activeId === entry.id) render();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setActive(id){
+    const img = state.images.find(i => i.id === id);
+    if(!img || !img.el) return;
+    state.activeId = id;
+    renderThumbs();
+    render();
+  }
+
+  function moveImage(id, dir){
+    const idx = state.images.findIndex(i => i.id === id);
+    const newIdx = idx + dir;
+    if(idx < 0 || newIdx < 0 || newIdx >= state.images.length) return;
+    const tmp = state.images[idx];
+    state.images[idx] = state.images[newIdx];
+    state.images[newIdx] = tmp;
+    renderThumbs();
+  }
+
+  function removeImage(id){
+    state.images = state.images.filter(i => i.id !== id);
+    if(state.activeId === id){
+      state.activeId = state.images.length ? state.images[0].id : null;
+    }
+    renderThumbs();
+    refreshBatchAvailability();
+    if(!state.images.length){
+      emptyState.style.display = "";
+      canvasWrap.style.display = "none";
+      downloadBtn.disabled = true;
+    } else {
+      render();
+    }
+  }
+
+  function renderThumbs(){
+    const list = $("thumbList");
+    list.innerHTML = "";
+    state.images.forEach((img, idx) => {
+      const item = document.createElement("div");
+      item.className = "thumb-item" + (img.id === state.activeId ? " is-active" : "");
+      item.dataset.id = img.id;
+
+      const badge = document.createElement("span");
+      badge.className = "thumb-badge";
+      badge.textContent = idx + 1;
+      item.appendChild(badge);
+
+      if(img.el){
+        const im = document.createElement("img");
+        im.src = img.el.src;
+        im.title = `${img.width} × ${img.height} px`;
+        item.appendChild(im);
+      } else {
+        const ph = document.createElement("div");
+        ph.className = "thumb-placeholder";
+        ph.textContent = "…";
+        item.appendChild(ph);
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "thumb-name";
+      meta.textContent = img.name;
+      meta.title = img.name;
+      item.appendChild(meta);
+
+      const actions = document.createElement("div");
+      actions.className = "thumb-actions";
+      actions.innerHTML =
+        `<button type="button" class="thumb-btn" data-action="up" ${idx===0?"disabled":""} title="Move earlier">↑</button>` +
+        `<button type="button" class="thumb-btn" data-action="down" ${idx===state.images.length-1?"disabled":""} title="Move later">↓</button>` +
+        `<button type="button" class="thumb-btn" data-action="use" title="Preview / edit template on this photo">✎</button>` +
+        `<button type="button" class="thumb-btn" data-action="remove" title="Remove">✕</button>`;
+      item.appendChild(actions);
+
+      list.appendChild(item);
+    });
+
+    list.querySelectorAll(".thumb-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.closest(".thumb-item").dataset.id;
+        const action = btn.dataset.action;
+        if(action === "up") moveImage(id, -1);
+        else if(action === "down") moveImage(id, 1);
+        else if(action === "use") setActive(id);
+        else if(action === "remove") removeImage(id);
+      });
+    });
+
+    const n = state.images.length;
+    const active = getActiveImage();
+    $("imagesNote").textContent = n === 0
+      ? "No photos yet. The first photo you add becomes the template you style below — that exact style is stamped onto every photo during batch export. Use ↑ / ↓ to reorder, ✎ to preview/edit a different photo, ✕ to remove."
+      : `${n} photo${n===1?"":"s"} loaded, in export order. Currently editing the template on: ${active ? active.name : "…loading"}.`;
+  }
+
+  /* ---------------- upload wiring ---------------- */
   const dropzone = $("dropzone");
   const fileInput = $("fileInput");
-  const fileMeta = $("fileMeta");
-  const fileDims = $("fileDims");
-
-  function loadImageFile(file){
-    if(!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        state.image.el = img;
-        state.image.width = img.naturalWidth;
-        state.image.height = img.naturalHeight;
-        state.image.name = file.name;
-        fileDims.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
-        fileMeta.style.display = "flex";
-        emptyState.style.display = "none";
-        canvasWrap.style.display = "block";
-        downloadBtn.disabled = false;
-        render();
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
 
   dropzone.addEventListener("click", () => fileInput.click());
   dropzone.addEventListener("keydown", (e) => { if(e.key === "Enter" || e.key === " "){ fileInput.click(); }});
-  fileInput.addEventListener("change", (e) => loadImageFile(e.target.files[0]));
+  fileInput.addEventListener("change", (e) => { addImageFiles(e.target.files); fileInput.value = ""; });
   ["dragenter","dragover"].forEach(ev => dropzone.addEventListener(ev, (e)=>{
     e.preventDefault(); dropzone.classList.add("is-drag");
   }));
@@ -664,10 +889,8 @@
     e.preventDefault(); dropzone.classList.remove("is-drag");
   }));
   dropzone.addEventListener("drop", (e) => {
-    const file = e.dataTransfer.files[0];
-    loadImageFile(file);
+    addImageFiles(e.dataTransfer.files);
   });
-  $("replaceLink").addEventListener("click", (e) => { e.preventDefault(); fileInput.click(); });
 
   /* ---------------- generic control wiring ---------------- */
   function bindText(id, obj, key, cb){
@@ -690,10 +913,9 @@
   function bindColor(id, obj, key){
     $(id).addEventListener("input", (e)=>{ obj[key] = e.target.value; render(); });
   }
-  function bindToggle(id, obj, key, controlsId){
+  function bindToggle(id, obj, key){
     $(id).addEventListener("change", (e)=>{
       obj[key] = e.target.checked;
-      if(controlsId) $(controlsId).style.opacity = obj[key] ? "1" : ".35";
       render();
     });
   }
@@ -718,16 +940,6 @@
       });
     });
   }
-
-  bindText("labelText", state.label, "text");
-  bindSelect("labelFont", state.label, "fontFamily");
-  bindRange("labelSize","labelSizeVal", state.label, "fontSizePct", "%");
-  bindRange("labelPad","labelPadVal", state.label, "padding", "×");
-  bindColor("labelTextColor", state.label, "textColor");
-  bindColor("labelBoxColor", state.label, "boxColor");
-  bindToggle("labelEnabled", state.label, "enabled", "labelControls");
-  bindCornerPicker(document.querySelector('.corner-picker[data-target="label"]'), state.label);
-
   function bindQuickColors(){
     document.querySelectorAll(".quick-colors").forEach(group => {
       const inputId = group.dataset.input;
@@ -740,21 +952,78 @@
       });
     });
   }
+
+  // Label tag
+  bindText("labelText", state.label, "text");
+  bindSelect("labelFont", state.label, "fontFamily");
+  bindRange("labelSize","labelSizeVal", state.label, "fontSizePct", "%");
+  bindRange("labelPad","labelPadVal", state.label, "padding", "×");
+  bindColor("labelTextColor", state.label, "textColor");
+  bindColor("labelBoxColor", state.label, "boxColor");
+  bindToggle("labelEnabled", state.label, "enabled");
+  bindCornerPicker(document.querySelector('.corner-picker[data-target="label"]'), state.label);
+  document.querySelectorAll("#labelControls .segmented").forEach(seg=>bindSegmented(seg, state.label));
+
+  // Shared price style
+  bindSelect("priceStyleFont", state.priceStyle, "fontFamily");
+  bindRange("priceStyleSize","priceStyleSizeVal", state.priceStyle, "fontSizePct", "%");
+  bindRange("priceStylePad","priceStylePadVal", state.priceStyle, "padding", "×");
+  bindColor("priceStyleTextColor", state.priceStyle, "textColor");
+  bindSelect("priceCurrency", state.priceStyle, "currency");
+  bindCornerPicker(document.querySelector('.corner-picker[data-target="priceStyle"]'), state.priceStyle);
+  bindSegmented($("priceStyleSeg"), state.priceStyle);
+
+  // Usual Price / Amazon Prime Price
+  bindNumber("upAmount", state.usualPrice, "amount");
+  bindColor("upBoxColor", state.usualPrice, "boxColor");
+  bindToggle("upEnabled", state.usualPrice, "enabled");
+  bindNumber("ppAmount", state.primePrice, "amount");
+  bindColor("ppBoxColor", state.primePrice, "boxColor");
+  bindToggle("ppEnabled", state.primePrice, "enabled");
+
   bindQuickColors();
 
-  bindNumber("priceAmount", state.price, "amount");
-  bindSelect("priceCurrency", state.price, "currency");
-  bindSelect("priceFont", state.price, "fontFamily");
-  bindRange("priceSize","priceSizeVal", state.price, "fontSizePct", "%");
-  bindRange("pricePad","pricePadVal", state.price, "padding", "×");
-  bindColor("priceTextColor", state.price, "textColor");
-  bindColor("priceBoxColor", state.price, "boxColor");
-  bindToggle("priceEnabled", state.price, "enabled", "priceControls");
-  bindCornerPicker(document.querySelector('.corner-picker[data-target="price"]'), state.price);
-
-  // wire segmented style buttons individually (label + price each have their own .segmented)
-  document.querySelectorAll("#labelControls .segmented").forEach(seg=>bindSegmented(seg, state.label));
-  document.querySelectorAll("#priceControls .segmented").forEach(seg=>bindSegmented(seg, state.price));
+  /* ---------------- reset-to-default ---------------- */
+  function syncLabelControls(){
+    $("labelFont").value = state.label.fontFamily;
+    $("labelSize").value = state.label.fontSizePct;
+    $("labelSizeVal").textContent = state.label.fontSizePct.toFixed(1) + "%";
+    $("labelPad").value = state.label.padding;
+    $("labelPadVal").textContent = state.label.padding.toFixed(1) + "×";
+    $("labelTextColor").value = state.label.textColor;
+    $("labelBoxColor").value = state.label.boxColor;
+    document.querySelector('.corner-picker[data-target="label"]').querySelectorAll(".eyelet")
+      .forEach(b => b.classList.toggle("active", b.dataset.corner === state.label.corner));
+    document.querySelector("#labelControls .segmented").querySelectorAll("button[data-style]")
+      .forEach(b => b.classList.toggle("active", !!state.label[b.dataset.style]));
+  }
+  function syncPriceControls(){
+    $("priceStyleFont").value = state.priceStyle.fontFamily;
+    $("priceStyleSize").value = state.priceStyle.fontSizePct;
+    $("priceStyleSizeVal").textContent = state.priceStyle.fontSizePct.toFixed(1) + "%";
+    $("priceStylePad").value = state.priceStyle.padding;
+    $("priceStylePadVal").textContent = state.priceStyle.padding.toFixed(1) + "×";
+    $("priceStyleTextColor").value = state.priceStyle.textColor;
+    $("upBoxColor").value = state.usualPrice.boxColor;
+    $("ppBoxColor").value = state.primePrice.boxColor;
+    document.querySelector('.corner-picker[data-target="priceStyle"]').querySelectorAll(".eyelet")
+      .forEach(b => b.classList.toggle("active", b.dataset.corner === state.priceStyle.corner));
+    $("priceStyleSeg").querySelectorAll("button[data-style]")
+      .forEach(b => b.classList.toggle("active", !!state.priceStyle[b.dataset.style]));
+  }
+  $("resetLabelDefaults").addEventListener("click", () => {
+    Object.assign(state.label, JSON.parse(JSON.stringify(LABEL_STYLE_DEFAULTS)));
+    syncLabelControls();
+    render();
+  });
+  $("resetPriceDefaults").addEventListener("click", () => {
+    Object.assign(state.priceStyle, JSON.parse(JSON.stringify(PRICE_STYLE_DEFAULTS)));
+    state.usualPrice.boxColor = UP_BOX_DEFAULT;
+    state.primePrice.boxColor = PP_BOX_DEFAULT;
+    currencySelect.value = state.priceStyle.currency;
+    syncPriceControls();
+    render();
+  });
 
   /* ---------------- canvas rendering ---------------- */
   function roundRectPath(c,x,y,w,h,r){
@@ -820,9 +1089,14 @@
     return { x, y, boxW, boxH, corner: cfg.corner };
   }
 
+  function mergePriceCfg(sub){
+    return { ...state.priceStyle, boxColor: sub.boxColor };
+  }
+
   function render(){
-    if(!state.image.el) return;
-    const { el, width, height } = state.image;
+    const img = getActiveImage();
+    if(!img || !img.el) return;
+    const { el, width, height } = img;
     canvas.width = width;
     canvas.height = height;
     ctx.clearRect(0,0,width,height);
@@ -835,9 +1109,16 @@
       const box = drawTag(ctx, state.label, state.label.text, width, height, marginPx, prev);
       if(box) prev = box;
     }
-    if(state.price.enabled){
-      const priceText = formatPrice(state.price.amount, state.price.currency);
-      drawTag(ctx, state.price, priceText, width, height, marginPx, prev);
+    if(state.usualPrice.enabled){
+      const cfg = mergePriceCfg(state.usualPrice);
+      const text = `${state.usualPrice.prefix} ${formatPrice(state.usualPrice.amount, state.priceStyle.currency)}`;
+      const box = drawTag(ctx, cfg, text, width, height, marginPx, prev);
+      if(box) prev = box;
+    }
+    if(state.primePrice.enabled){
+      const cfg = mergePriceCfg(state.primePrice);
+      const text = `${state.primePrice.prefix} ${formatPrice(state.primePrice.amount, state.priceStyle.currency)}`;
+      drawTag(ctx, cfg, text, width, height, marginPx, prev);
     }
   }
 
@@ -846,12 +1127,12 @@
     document.fonts.ready.then(render);
   }
 
-  /* ---------------- download modal ---------------- */
+  /* ---------------- download modal (single active photo) ---------------- */
   const modalBackdrop = $("modalBackdrop");
   const filenameInput = $("filenameInput");
 
   downloadBtn.addEventListener("click", () => {
-    if(!state.image.el) return;
+    if(!getActiveImage()) return;
     modalBackdrop.classList.add("open");
     filenameInput.focus();
     filenameInput.select();
@@ -879,6 +1160,171 @@
     if(e.key === "Enter") $("confirmDownload").click();
     if(e.key === "Escape") modalBackdrop.classList.remove("open");
   });
+
+  /* ---------------- batch: excel paste parsing ---------------- */
+  function populateColumnSelect(id, defaultLetter){
+    const sel = $(id);
+    LETTERS.forEach((L, idx)=>{
+      const opt = document.createElement("option");
+      opt.value = idx;
+      opt.textContent = L;
+      if(L === defaultLetter) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+  populateColumnSelect("colText", "B");
+  populateColumnSelect("colUP", "I");
+  populateColumnSelect("colPP", "J");
+
+  // Quote-aware delimited-text parser: handles tab-separated Excel paste,
+  // including quoted cells that contain embedded tabs/newlines.
+  function parseDelimited(text, delim){
+    const rows = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+    let i = 0;
+    const len = text.length;
+    while(i < len){
+      const ch = text[i];
+      if(inQuotes){
+        if(ch === '"'){
+          if(text[i+1] === '"'){ field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += ch; i++; continue;
+      } else {
+        if(ch === '"'){ inQuotes = true; i++; continue; }
+        if(ch === delim){ row.push(field); field = ""; i++; continue; }
+        if(ch === "\r"){ i++; continue; }
+        if(ch === "\n"){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+        field += ch; i++; continue;
+      }
+    }
+    if(field.length || row.length){ row.push(field); rows.push(row); }
+    return rows.filter(r => r.some(c => c.trim() !== ""));
+  }
+
+  function refreshBatchAvailability(){
+    const n = state.batchRows.length;
+    const imgN = state.images.filter(i => i.el).length;
+    $("exportBatchBtn").disabled = !(n > 0 && imgN > 0);
+  }
+
+  $("parseBatchBtn").addEventListener("click", () => {
+    const raw = $("batchPaste").value;
+    if(!raw.trim()){
+      $("batchSummary").textContent = "Paste some rows first.";
+      state.batchRows = [];
+      refreshBatchAvailability();
+      return;
+    }
+    const grid = parseDelimited(raw, "\t");
+    const textIdx = parseInt($("colText").value, 10);
+    const upIdx = parseInt($("colUP").value, 10);
+    const ppIdx = parseInt($("colPP").value, 10);
+    state.batchRows = grid.map(cols => ({
+      label: (cols[textIdx] || "").trim(),
+      usualRaw: (cols[upIdx] || "").trim(),
+      primeRaw: (cols[ppIdx] || "").trim()
+    })).filter(r => r.label || r.usualRaw || r.primeRaw);
+
+    const n = state.batchRows.length;
+    const imgN = state.images.filter(i => i.el).length;
+    $("batchSummary").textContent = n
+      ? `Parsed ${n} row${n===1?"":"s"}. ${imgN} photo${imgN===1?"":"s"} loaded — will export ${Math.min(n, imgN)} pin${Math.min(n,imgN)===1?"":"s"}.`
+      : "Nothing usable found in that paste — check the column mapping.";
+    refreshBatchAvailability();
+  });
+
+  function sanitizeFilename(s){
+    return (s || "").toLowerCase().replace(/[^a-z0-9\-_ ]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
+  }
+
+  function formatPriceCell(prefix, raw, currencyCode){
+    raw = (raw || "").trim();
+    if(!raw) return null;
+    const cleaned = raw.replace(/[^0-9.\-]/g, "");
+    const num = parseFloat(cleaned);
+    if(!isNaN(num) && cleaned !== "" && cleaned !== "-" && cleaned !== "."){
+      return `${prefix} ${formatPrice(num, currencyCode)}`;
+    }
+    // Not a recognizable number — show the raw cell text as-is so nothing is silently dropped.
+    return `${prefix} ${raw}`;
+  }
+
+  function downloadBlob(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportBatch(){
+    const rows = state.batchRows;
+    const imgs = state.images.filter(i => i.el);
+    const n = Math.min(rows.length, imgs.length);
+    if(n === 0) return;
+    if(typeof JSZip === "undefined"){
+      $("batchProgress").textContent = "Could not load the zip library — check your internet connection and try again.";
+      return;
+    }
+    const btn = $("exportBatchBtn");
+    btn.disabled = true;
+    const zip = new JSZip();
+    const used = new Set();
+
+    for(let i = 0; i < n; i++){
+      $("batchProgress").textContent = `Rendering ${i+1} of ${n}…`;
+      const row = rows[i];
+      const img = imgs[i];
+
+      const off = document.createElement("canvas");
+      off.width = img.width; off.height = img.height;
+      const octx = off.getContext("2d");
+      octx.drawImage(img.el, 0, 0, img.width, img.height);
+
+      const marginPx = Math.max(img.width, img.height) * 0.035;
+      let prev = null;
+
+      if(state.label.enabled && row.label){
+        const box = drawTag(octx, state.label, row.label, img.width, img.height, marginPx, prev);
+        if(box) prev = box;
+      }
+      if(state.usualPrice.enabled){
+        const text = formatPriceCell(state.usualPrice.prefix, row.usualRaw, state.priceStyle.currency);
+        if(text){
+          const cfg = mergePriceCfg(state.usualPrice);
+          const box = drawTag(octx, cfg, text, img.width, img.height, marginPx, prev);
+          if(box) prev = box;
+        }
+      }
+      if(state.primePrice.enabled){
+        const text = formatPriceCell(state.primePrice.prefix, row.primeRaw, state.priceStyle.currency);
+        if(text){
+          const cfg = mergePriceCfg(state.primePrice);
+          drawTag(octx, cfg, text, img.width, img.height, marginPx, prev);
+        }
+      }
+
+      const blob = await new Promise(res => off.toBlob(res, "image/jpeg", 0.92));
+      let base = sanitizeFilename(row.label) || `pin-${i+1}`;
+      let filename = base + ".jpg";
+      let dupe = 2;
+      while(used.has(filename)){ filename = `${base}-${dupe}.jpg`; dupe++; }
+      used.add(filename);
+      zip.file(filename, blob);
+    }
+
+    $("batchProgress").textContent = "Zipping…";
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    downloadBlob(zipBlob, "pinterest-pins.zip");
+    $("batchProgress").textContent = `Done — exported ${n} pin${n===1?"":"s"} as pinterest-pins.zip.`;
+    btn.disabled = false;
+  }
+
+  $("exportBatchBtn").addEventListener("click", exportBatch);
 
 })();
 </script>
