@@ -718,7 +718,7 @@
       const currencyPart = parts.find(p => p.type === "currency");
       if(currencyPart) symbol = currencyPart.value;
     }catch(e){ /* keep code as symbol fallback */ }
-    const decimals = (code === "JPY") ? 0 : (Number.isInteger(converted) ? 0 : 2);
+    const decimals = (code === "JPY") ? 0 : 2; // always show cents (e.g. $40.00) for a polished look
     const numStr = converted.toLocaleString("en-US", { minimumFractionDigits:decimals, maximumFractionDigits:decimals });
     return `${code} ${symbol}${numStr}`;
   }
@@ -1026,6 +1026,31 @@
   });
 
   /* ---------------- canvas rendering ---------------- */
+  /* ---------------- font warming ---------------- */
+  // Canvas text silently falls back to a system font if the webfont hasn't
+  // actually finished downloading yet (the <link> tag alone doesn't force it —
+  // browsers lazy-load font files until they're used to paint text). We force
+  // every family/weight/style combo used anywhere in the UI to load up front
+  // so the very first render/export already has the right font, instead of
+  // only working after the user re-touches a font dropdown.
+  const FONT_FAMILIES = ["Playfair Display","Fraunces","Space Grotesk","Poppins","Inter","Bebas Neue","IBM Plex Mono"];
+  async function ensureFontLoaded(family, weight, italic){
+    if(!(document.fonts && document.fonts.load)) return;
+    try{ await document.fonts.load(`${italic ? "italic " : ""}${weight} 32px "${family}"`); }
+    catch(e){ /* font weight/style combo unavailable — browser will substitute gracefully */ }
+  }
+  async function warmAllFonts(){
+    const jobs = [];
+    FONT_FAMILIES.forEach(family=>{
+      ["400","700"].forEach(weight=>{
+        [false, true].forEach(italic=>{
+          jobs.push(ensureFontLoaded(family, weight, italic));
+        });
+      });
+    });
+    await Promise.allSettled(jobs);
+  }
+
   function roundRectPath(c,x,y,w,h,r){
     r = Math.max(0, Math.min(r, w/2, h/2));
     if(c.roundRect){ c.beginPath(); c.roundRect(x,y,w,h,r); return; }
@@ -1093,6 +1118,91 @@
     return { ...state.priceStyle, boxColor: sub.boxColor };
   }
 
+  // Draws a price tag as two stacked-together segments in one box:
+  // the prefix ("U.P." / "Prime Member P.") styled like the label/text tag
+  // (its font family + colour), and the amount styled with the price style —
+  // both sized to match the price's font size, sitting side by side.
+  function drawPriceTag(c, priceCfg, prefixText, amountText, imgW, imgH, marginPx, prev){
+    if(!amountText || !amountText.trim()) return null;
+
+    const fontSize = Math.max(8, imgH * (priceCfg.fontSizePct/100));
+    const labelCfg = state.label;
+    const hasPrefix = !!(prefixText && prefixText.trim());
+
+    const priceFont = `${priceCfg.italic ? "italic" : "normal"} ${priceCfg.bold ? "700" : "400"} ${fontSize}px "${priceCfg.fontFamily}"`;
+    const prefixFont = `${labelCfg.italic ? "italic" : "normal"} ${labelCfg.bold ? "700" : "400"} ${fontSize}px "${labelCfg.fontFamily}"`;
+
+    c.textBaseline = "alphabetic";
+
+    let prefixMetrics = null, prefixW = 0;
+    if(hasPrefix){
+      c.font = prefixFont;
+      prefixMetrics = c.measureText(prefixText);
+      prefixW = prefixMetrics.width;
+    }
+
+    c.font = priceFont;
+    const priceMetrics = c.measureText(amountText);
+    const priceW = priceMetrics.width;
+
+    let ascent = priceMetrics.actualBoundingBoxAscent || fontSize*0.76;
+    let descent = priceMetrics.actualBoundingBoxDescent || fontSize*0.22;
+    if(hasPrefix){
+      ascent = Math.max(ascent, prefixMetrics.actualBoundingBoxAscent || fontSize*0.76);
+      descent = Math.max(descent, prefixMetrics.actualBoundingBoxDescent || fontSize*0.22);
+    }
+
+    const gap = hasPrefix ? fontSize * 0.32 : 0;
+    const padX = fontSize * 0.55 * priceCfg.padding;
+    const padY = fontSize * 0.32 * priceCfg.padding;
+    const contentW = prefixW + gap + priceW;
+    const boxW = contentW + padX*2;
+    const boxH = ascent + descent + padY*2;
+
+    const isLeft = priceCfg.corner.includes("left");
+    const isTop = priceCfg.corner.includes("top");
+
+    let x = isLeft ? marginPx : imgW - marginPx - boxW;
+    let y = isTop ? marginPx : imgH - marginPx - boxH;
+
+    if(prev && prev.corner === priceCfg.corner){
+      const stackGap = fontSize * 0.45;
+      y = isTop ? (prev.y + prev.boxH + stackGap) : (prev.y - stackGap - boxH);
+    }
+
+    c.fillStyle = priceCfg.boxColor;
+    roundRectPath(c, x, y, boxW, boxH, fontSize*0.16);
+    c.fill();
+
+    const textY = y + padY + ascent;
+    let cursorX = x + padX;
+
+    if(hasPrefix){
+      c.font = prefixFont;
+      c.fillStyle = labelCfg.textColor;
+      c.fillText(prefixText, cursorX, textY);
+      if(labelCfg.underline){
+        const uY = textY + descent*0.45;
+        c.strokeStyle = labelCfg.textColor;
+        c.lineWidth = Math.max(1, fontSize*0.045);
+        c.beginPath(); c.moveTo(cursorX, uY); c.lineTo(cursorX+prefixW, uY); c.stroke();
+      }
+      cursorX += prefixW + gap;
+    }
+
+    c.font = priceFont;
+    c.fillStyle = priceCfg.textColor;
+    c.fillText(amountText, cursorX, textY);
+    if(priceCfg.underline){
+      const uY = textY + descent*0.45;
+      c.strokeStyle = priceCfg.textColor;
+      c.lineWidth = Math.max(1, fontSize*0.045);
+      c.beginPath(); c.moveTo(cursorX, uY); c.lineTo(cursorX+priceW, uY); c.stroke();
+    }
+
+    return { x, y, boxW, boxH, corner: priceCfg.corner };
+  }
+
   function render(){
     const img = getActiveImage();
     if(!img || !img.el) return;
@@ -1111,18 +1221,21 @@
     }
     if(state.usualPrice.enabled){
       const cfg = mergePriceCfg(state.usualPrice);
-      const text = `${state.usualPrice.prefix} ${formatPrice(state.usualPrice.amount, state.priceStyle.currency)}`;
-      const box = drawTag(ctx, cfg, text, width, height, marginPx, prev);
+      const amountText = formatPrice(state.usualPrice.amount, state.priceStyle.currency);
+      const box = drawPriceTag(ctx, cfg, state.usualPrice.prefix, amountText, width, height, marginPx, prev);
       if(box) prev = box;
     }
     if(state.primePrice.enabled){
       const cfg = mergePriceCfg(state.primePrice);
-      const text = `${state.primePrice.prefix} ${formatPrice(state.primePrice.amount, state.priceStyle.currency)}`;
-      drawTag(ctx, cfg, text, width, height, marginPx, prev);
+      const amountText = formatPrice(state.primePrice.amount, state.priceStyle.currency);
+      drawPriceTag(ctx, cfg, state.primePrice.prefix, amountText, width, height, marginPx, prev);
     }
   }
 
-  // re-render once fonts are ready so metrics are accurate
+  // Preload every font family/weight/style combo up front, then re-render,
+  // so the first render already uses the right fonts (not just after the
+  // user re-touches a font dropdown).
+  warmAllFonts().then(render);
   if(document.fonts && document.fonts.ready){
     document.fonts.ready.then(render);
   }
@@ -1241,7 +1354,9 @@
     return (s || "").toLowerCase().replace(/[^a-z0-9\-_ ]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
   }
 
-  function formatPriceCell(prefix, raw, currencyCode, strict){
+  // Returns just the amount text (e.g. "USD $46.00~") — the prefix ("U.P." /
+  // "Prime Member P.") is drawn separately in label styling by drawPriceTag.
+  function formatPriceCell(raw, currencyCode, strict){
     raw = (raw || "").trim();
     if(!raw) return null;
 
@@ -1254,7 +1369,7 @@
       const rounded = Math.ceil(num);
       const wasRounded = rounded !== num; // not already a flat whole-dollar amount
       const showTilde = hadTilde || wasRounded;
-      return `${prefix} ${formatPrice(rounded, currencyCode)}${showTilde ? "~" : ""}`;
+      return `${formatPrice(rounded, currencyCode)}${showTilde ? "~" : ""}`;
     }
 
     if(strict){
@@ -1264,7 +1379,7 @@
     }
 
     // Not a recognizable number — show the raw cell text as-is so nothing is silently dropped.
-    return `${prefix} ${raw}`;
+    return raw;
   }
 
   function downloadBlob(blob, filename){
@@ -1286,6 +1401,7 @@
     }
     const btn = $("exportBatchBtn");
     btn.disabled = true;
+    await warmAllFonts(); // guarantee correct fonts even on a first-ever export
     const zip = new JSZip();
     const used = new Set();
 
@@ -1307,18 +1423,18 @@
         if(box) prev = box;
       }
       if(state.usualPrice.enabled){
-        const text = formatPriceCell(state.usualPrice.prefix, row.usualRaw, state.priceStyle.currency);
-        if(text){
+        const amountText = formatPriceCell(row.usualRaw, state.priceStyle.currency, false);
+        if(amountText){
           const cfg = mergePriceCfg(state.usualPrice);
-          const box = drawTag(octx, cfg, text, img.width, img.height, marginPx, prev);
+          const box = drawPriceTag(octx, cfg, state.usualPrice.prefix, amountText, img.width, img.height, marginPx, prev);
           if(box) prev = box;
         }
       }
       if(state.primePrice.enabled){
-        const text = formatPriceCell(state.primePrice.prefix, row.primeRaw, state.priceStyle.currency, true);
-        if(text){
+        const amountText = formatPriceCell(row.primeRaw, state.priceStyle.currency, true);
+        if(amountText){
           const cfg = mergePriceCfg(state.primePrice);
-          drawTag(octx, cfg, text, img.width, img.height, marginPx, prev);
+          drawPriceTag(octx, cfg, state.primePrice.prefix, amountText, img.width, img.height, marginPx, prev);
         }
       }
 
